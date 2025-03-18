@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">Конвертер Времени Нагрева Микроволновки</string>
+    <string name="source_wattage_label">Исходная мощность:</string>
+    <string name="target_wattage_label">Целевая мощность:</string>
+    <string name="cooking_time_label">Время нагрева:</string>
+    <string name="minutes_unit">мин</string>
+    <string name="seconds_unit">сек</string>
+    <string name="watt_unit">Вт</string>
+    <string name="convert_button">Конвертировать</string>
+    <string name="result_title">Результат Конвертации</string>
+    <string name="result_format_source">%1$dВт на %2$d мин %3$d сек при</string>
+    <string name="result_format_target">При нагреве на %1$dВт</string>
+    <string name="result_format_time">Требуется %1$d мин %2$d сек</string>
+</resources>

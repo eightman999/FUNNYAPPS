@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">電子レンジ加熱時間変換</string>
+    <string name="source_wattage_label">変換元ワット数:</string>
+    <string name="target_wattage_label">変換先ワット数:</string>
+    <string name="cooking_time_label">加熱時間:</string>
+    <string name="minutes_unit">分</string>
+    <string name="seconds_unit">秒</string>
+    <string name="watt_unit">W</string>
+    <string name="convert_button">変換する</string>
+    <string name="result_title">変換結果</string>
+    <string name="result_format_source">%1$dWで%2$d分%3$d秒を</string>
+    <string name="result_format_target">%1$dWで加熱するには</string>
+    <string name="result_format_time">%1$d分%2$d秒 必要です</string>
+</resources>

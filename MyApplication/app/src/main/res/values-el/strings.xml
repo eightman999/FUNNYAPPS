@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">Μετατροπέας Χρόνου Θέρμανσης Φούρνου Μικροκυμάτων</string>
+    <string name="source_wattage_label">Αρχική ισχύς:</string>
+    <string name="target_wattage_label">Ισχύς στόχος:</string>
+    <string name="cooking_time_label">Χρόνος μαγειρέματος:</string>
+    <string name="minutes_unit">λεπ</string>
+    <string name="seconds_unit">δευτ</string>
+    <string name="watt_unit">W</string>
+    <string name="convert_button">Μετατροπή</string>
+    <string name="result_title">Αποτέλεσμα Μετατροπής</string>
+    <string name="result_format_source">%1$dW για %2$d λεπ %3$d δευτ σε</string>
+    <string name="result_format_target">Όταν θερμαίνετε στα %1$dW</string>
+    <string name="result_format_time">Χρειάζεστε %1$d λεπ %2$d δευτ</string>
+</resources>

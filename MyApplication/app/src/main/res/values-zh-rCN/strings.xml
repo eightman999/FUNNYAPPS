@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">微波炉加热时间转换器</string>
+    <string name="source_wattage_label">源功率:</string>
+    <string name="target_wattage_label">目标功率:</string>
+    <string name="cooking_time_label">加热时间:</string>
+    <string name="minutes_unit">分</string>
+    <string name="seconds_unit">秒</string>
+    <string name="watt_unit">瓦</string>
+    <string name="convert_button">转换</string>
+    <string name="result_title">转换结果</string>
+    <string name="result_format_source">%1$d瓦加热%2$d分%3$d秒</string>
+    <string name="result_format_target">使用%1$d瓦加热需要</string>
+    <string name="result_format_time">%1$d分%2$d秒</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">Microwave Heating Time Converter</string>
+    <string name="source_wattage_label">Source Wattage:</string>
+    <string name="target_wattage_label">Target Wattage:</string>
+    <string name="cooking_time_label">Heating Time:</string>
+    <string name="minutes_unit">min</string>
+    <string name="seconds_unit">sec</string>
+    <string name="watt_unit">W</string>
+    <string name="convert_button">Convert</string>
+    <string name="result_title">Conversion Result</string>
+    <string name="result_format_source">%1$dW for %2$d min %3$d sec at</string>
+    <string name="result_format_target">When heating at %1$dW</string>
+    <string name="result_format_time">You need %1$d min %2$d sec</string>
+</resources>

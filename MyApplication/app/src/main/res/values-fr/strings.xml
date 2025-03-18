@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">Convertisseur de Temps de Micro-ondes</string>
+    <string name="source_wattage_label">Puissance source:</string>
+    <string name="target_wattage_label">Puissance cible:</string>
+    <string name="cooking_time_label">Temps de cuisson:</string>
+    <string name="minutes_unit">min</string>
+    <string name="seconds_unit">sec</string>
+    <string name="watt_unit">W</string>
+    <string name="convert_button">Convertir</string>
+    <string name="result_title">Résultat de Conversion</string>
+    <string name="result_format_source">%1$dW pendant %2$d min %3$d sec à</string>
+    <string name="result_format_target">En chauffant à %1$dW</string>
+    <string name="result_format_time">Vous avez besoin de %1$d min %2$d sec</string>
+</resources>

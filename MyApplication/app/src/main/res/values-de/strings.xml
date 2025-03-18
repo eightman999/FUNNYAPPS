@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">Mikrowellen-Heizzeit-Konverter</string>
+    <string name="source_wattage_label">Ausgangsleistung:</string>
+    <string name="target_wattage_label">Zielleistung:</string>
+    <string name="cooking_time_label">Heizzeit:</string>
+    <string name="minutes_unit">Min</string>
+    <string name="seconds_unit">Sek</string>
+    <string name="watt_unit">W</string>
+    <string name="convert_button">Umrechnen</string>
+    <string name="result_title">Umrechnungsergebnis</string>
+    <string name="result_format_source">%1$dW für %2$d Min %3$d Sek bei</string>
+    <string name="result_format_target">Beim Erhitzen mit %1$dW</string>
+    <string name="result_format_time">Benötigen Sie %1$d Min %2$d Sek</string>
+</resources>
