@@ -13,4 +13,10 @@
     <string name="result_format_source">%1$dW for %2$d min %3$d sec at</string>
     <string name="result_format_target">When heating at %1$dW</string>
     <string name="result_format_time">You need %1$d min %2$d sec</string>
+
+    <!-- Settings strings -->
+    <string name="settings_title">Settings</string>
+    <string name="dark_mode_label">Dark mode</string>
+    <string name="language_label">Language</string>
+    <string name="close_settings">Close</string>
 </resources>
