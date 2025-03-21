@@ -68,6 +68,7 @@ class SettingsManager(private val context: Context) {
             "es" -> Locale("es")
             "it" -> Locale.ITALIAN
             "ja" -> Locale.JAPANESE
+            "ko" -> Locale.KOREAN
             "ru" -> Locale("ru")
             "zh" -> Locale.CHINESE
             "pt" -> Locale("pt")

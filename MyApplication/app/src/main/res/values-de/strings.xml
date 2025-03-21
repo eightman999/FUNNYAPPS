@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dW für %2$d Min %3$d Sek bei</string>
     <string name="result_format_target">Beim Erhitzen mit %1$dW</string>
     <string name="result_format_time">Benötigen Sie %1$d Min %2$d Sek</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="dark_mode_label">Dunkelmodus</string>
+    <string name="language_label">Sprache</string>
+    <string name="close_settings">Schließen</string>
 </resources>

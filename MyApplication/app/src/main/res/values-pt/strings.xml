@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dW por %2$d min %3$d seg em</string>
     <string name="result_format_target">Ao aquecer em %1$dW</string>
     <string name="result_format_time">Você precisa de %1$d min %2$d seg</string>
+    <string name="settings_title">Configurações</string>
+    <string name="dark_mode_label">Modo escuro</string>
+    <string name="language_label">Idioma</string>
+    <string name="close_settings">Fechar</string>
 </resources>

@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dWで%2$d分%3$d秒を</string>
     <string name="result_format_target">%1$dWで加熱するには</string>
     <string name="result_format_time">%1$d分%2$d秒 必要です</string>
+    <string name="settings_title">設定</string>
+    <string name="dark_mode_label">ダークモード</string>
+    <string name="language_label">言語</string>
+    <string name="close_settings">閉じる</string>
 </resources>

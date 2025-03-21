@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WattTime</string>
+    <string name="app_title">"    WattTime"</string>
+    <string name="source_wattage_label">"    전자레인지 가열 시간 변환기"</string>
+    <string name="target_wattage_label">"    출발 와트:"</string>
+    <string name="cooking_time_label">"    목표 와트:"</string>
+    <string name="minutes_unit">"    가열 시간:"</string>
+    <string name="seconds_unit">"    분"</string>
+    <string name="watt_unit">"    초"</string>
+    <string name="convert_button">"    W"</string>
+    <string name="result_title">"    변환"</string>
+    <string name="result_format_source">"    변환 결과"</string>
+    <string name="result_format_target">"    %1$dW에서 %2$d분 %3$d초를"</string>
+    <string name="result_format_time">"    %1$dW로 가열할 때"</string>
+    <string name="settings_title">"    %1$d분 %2$d초가 필요합니다"</string>
+    <string name="dark_mode_label">다크 모드</string>
+    <string name="language_label">언어</string>
+    <string name="close_settings">닫기</string>
+</resources>

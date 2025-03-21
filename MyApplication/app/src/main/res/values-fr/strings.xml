@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dW pendant %2$d min %3$d sec à</string>
     <string name="result_format_target">En chauffant à %1$dW</string>
     <string name="result_format_time">Vous avez besoin de %1$d min %2$d sec</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="dark_mode_label">Mode sombre</string>
+    <string name="language_label">Langue</string>
+    <string name="close_settings">Fermer</string>
 </resources>

@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dW για %2$d λεπ %3$d δευτ σε</string>
     <string name="result_format_target">Όταν θερμαίνετε στα %1$dW</string>
     <string name="result_format_time">Χρειάζεστε %1$d λεπ %2$d δευτ</string>
+    <string name="settings_title">Ρυθμίσεις</string>
+    <string name="dark_mode_label">Σκοτεινή λειτουργία</string>
+    <string name="language_label">Γλώσσα</string>
+    <string name="close_settings">Κλείσιμο</string>
 </resources>

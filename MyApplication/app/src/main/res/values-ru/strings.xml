@@ -13,4 +13,8 @@
     <string name="result_format_source">%1$dВт на %2$d мин %3$d сек при</string>
     <string name="result_format_target">При нагреве на %1$dВт</string>
     <string name="result_format_time">Требуется %1$d мин %2$d сек</string>
+    <string name="settings_title">Настройки</string>
+    <string name="dark_mode_label">Темный режим</string>
+    <string name="language_label">Язык</string>
+    <string name="close_settings">Закрыть</string>
 </resources>

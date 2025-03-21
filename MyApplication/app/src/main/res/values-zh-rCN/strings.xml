@@ -12,4 +12,8 @@
     <string name="result_format_source">%1$d瓦加热%2$d分%3$d秒</string>
     <string name="result_format_target">使用%1$d瓦加热需要</string>
     <string name="result_format_time">%1$d分%2$d秒</string>
+    <string name="settings_title">设置</string>
+    <string name="dark_mode_label">深色模式</string>
+    <string name="language_label">语言</string>
+    <string name="close_settings">关闭</string>
 </resources>
