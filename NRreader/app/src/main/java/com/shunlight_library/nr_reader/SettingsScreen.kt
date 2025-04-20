@@ -1,5 +1,10 @@
 package com.shunlight_library.nr_reader
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +43,7 @@ fun SettingsScreen(
     var backgroundColor by remember { mutableStateOf("White") }
     var selfServerAccess by remember { mutableStateOf(false) }
     var textOrientation by remember { mutableStateOf("Horizontal") }
+    var selfServerPath by remember { mutableStateOf("") }
 
     // Load saved preferences when the screen is created
     LaunchedEffect(key1 = true) {
@@ -47,6 +53,23 @@ fun SettingsScreen(
         backgroundColor = settingsStore.backgroundColor.first()
         selfServerAccess = settingsStore.selfServerAccess.first()
         textOrientation = settingsStore.textOrientation.first()
+        selfServerPath = settingsStore.selfServerPath.first() // 追加
+    }
+
+    // ファイル選択のランチャー
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                // URIからパスを取得
+                val path = uri.toString()
+                selfServerPath = path
+
+                // デバッグ情報をログに出力するなどの処理を行うことができます
+                // Log.d("SettingsScreen", "Selected file: $path")
+            }
+        }
     }
 
     // Background color options
@@ -214,22 +237,59 @@ fun SettingsScreen(
                 }
             }
 
+            // 自己サーバーアクセスがONの場合のみディレクトリ選択ボタンを表示
+            if (selfServerAccess) {
+                Divider()
+
+                SettingSection(title = "自己サーバーのディレクトリ設定") {
+                    // 選択されたパスがある場合は表示
+                    if (selfServerPath.isNotEmpty()) {
+                        Text(
+                            text = "選択されたファイル: $selfServerPath",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            // ファイル選択インテントを起動
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "text/html"  // HTML形式のファイルのみ表示
+                            }
+                            filePickerLauncher.launch(intent)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text("index.htmlを選択")
+                    }
+
+                    Text(
+                        text = "自己サーバーのindex.htmlファイルを選択してください",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // Save Button
-            Button(
+        Button(
                 onClick = {
                     scope.launch {
-                        // Save all settings to DataStore
                         settingsStore.saveAllSettings(
                             themeMode = themeMode,
                             fontFamily = fontFamily,
                             fontSize = fontSize,
                             backgroundColor = backgroundColor,
                             selfServerAccess = selfServerAccess,
-                            textOrientation = textOrientation
+                            textOrientation = textOrientation,
+                            selfServerPath = selfServerPath // 追加
                         )
-                        // Return to previous screen
                         onBack()
                     }
                 },
@@ -237,6 +297,7 @@ fun SettingsScreen(
             ) {
                 Text("設定を保存")
             }
+
         }
     }
 }

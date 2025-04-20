@@ -25,6 +25,7 @@ class SettingsStore(private val context: Context) {
         val BACKGROUND_COLOR = stringPreferencesKey("background_color")
         val SELF_SERVER_ACCESS = booleanPreferencesKey("self_server_access")
         val TEXT_ORIENTATION = stringPreferencesKey("text_orientation")
+        val SELF_SERVER_PATH_KEY = stringPreferencesKey("self_server_path")
     }
 
     // Default values
@@ -34,6 +35,7 @@ class SettingsStore(private val context: Context) {
     val defaultBackgroundColor = "White"
     val defaultSelfServerAccess = false
     val defaultTextOrientation = "Horizontal"
+    val defaultSelfServerPath = ""
 
     // Get the theme mode preference as a Flow
     val themeMode: Flow<String> = context.dataStore.data
@@ -155,14 +157,27 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    val selfServerPath = context.dataStore.data.map { preferences ->
+        preferences[SELF_SERVER_PATH_KEY] ?: ""
+    }
+
+    suspend fun saveSelfServerPath(path: String) {
+        context.dataStore.edit { preferences ->
+            preferences[SELF_SERVER_PATH_KEY] = path
+        }
+    }
+
+
     // Helper function to save all settings at once
+// これを次のように変更します：
     suspend fun saveAllSettings(
         themeMode: String,
         fontFamily: String,
         fontSize: Int,
         backgroundColor: String,
         selfServerAccess: Boolean,
-        textOrientation: String
+        textOrientation: String,
+        selfServerPath: String = "" // デフォルト値を追加
     ) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = themeMode
@@ -171,6 +186,7 @@ class SettingsStore(private val context: Context) {
             preferences[BACKGROUND_COLOR] = backgroundColor
             preferences[SELF_SERVER_ACCESS] = selfServerAccess
             preferences[TEXT_ORIENTATION] = textOrientation
+            preferences[SELF_SERVER_PATH_KEY] = selfServerPath // 新しいパラメータの保存
         }
     }
 }
