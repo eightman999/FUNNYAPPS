@@ -1,6 +1,7 @@
 package com.shunlight_library.nr_reader
 
 import android.os.Bundle
+import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -24,6 +25,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
 import com.shunlight_library.nr_reader.ui.theme.NRreaderTheme
 import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
@@ -31,7 +33,19 @@ import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Hide the status bar completely
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        )
+
+        // Make the app content go edge-to-edge
         enableEdgeToEdge()
+
+        // Hide the system bars and make the content draw under them
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             NRreaderTheme {
                 NovelReaderApp()
