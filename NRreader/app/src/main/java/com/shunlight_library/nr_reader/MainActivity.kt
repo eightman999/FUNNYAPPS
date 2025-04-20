@@ -24,7 +24,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
 import com.shunlight_library.nr_reader.ui.theme.NRreaderTheme
+import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,10 +45,16 @@ class MainActivity : ComponentActivity() {
 fun NovelReaderApp() {
     val lightBlue = Color(0xFF80C8FF) // 指定された色に変更
     var showWebView by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf("") }
     var currentUrl by remember { mutableStateOf("") }
 
-    if (showWebView) {
+    // 設定画面の表示
+    if (showSettings) {
+        SettingsScreen(onBack = { showSettings = false })
+    }
+    // WebViewの表示
+    else if (showWebView) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -68,9 +76,16 @@ fun NovelReaderApp() {
                 WebViewScreen(url = currentUrl)
             }
         }
-    } else {
+    }
+    // メイン画面の表示
+    else {
+        // Get the current app settings
+        val appSettings = LocalAppSettings.current
+
         LazyColumn(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(appSettings.backgroundColorValue)
         ) {
             // 上部セクション - 新着・更新情報
             item {
@@ -248,7 +263,11 @@ fun NovelReaderApp() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     NavButton(title = "ダウンロード状況", icon = "⬇")
-                    NavButton(title = "設定", icon = "⚙")
+                    NavButton(
+                        title = "設定",
+                        icon = "⚙",
+                        onClick = { showSettings = true }
+                    )
                 }
                 // スペース追加
                 Spacer(modifier = Modifier.height(100.dp))
