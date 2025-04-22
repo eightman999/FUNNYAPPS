@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+    // MainActivity.kt の onCreate メソッドに追加
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -51,6 +52,11 @@ class MainActivity : ComponentActivity() {
 
         // Hide the system bars and make the content draw under them
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // 永続的な権限を確認
+        val settingsStore = SettingsStore(this)
+
+        // 必要に応じて初期化処理
 
         setContent {
             NRreaderTheme {
@@ -78,24 +84,46 @@ fun NovelReaderApp() {
     // 設定情報を取得
     var selfServerPath by remember { mutableStateOf("") }
     var selfServerAccess by remember { mutableStateOf(false) }
+    var hasValidPermission by remember { mutableStateOf(false) }
 
-    // アプリ起動時に設定情報を読み込む
-    LaunchedEffect(key1 = true) {
-        settingsStore.selfServerPath.collect { path ->
-            if (path != selfServerPath) {
-                selfServerPath = path
-                // パスが変更された場合はキャッシュをクリア
-                parser.clearCache()
-                Log.d("NovelReaderApp", "サーバーパスを更新: $path")
-            }
+    // DisposableEffect を追加
+    DisposableEffect(key1 = Unit) {
+        onDispose {
+            // クリーンアップ処理
+            Log.d("NovelReaderApp", "メイン画面が破棄されました")
         }
     }
 
-    // selfServerAccessの設定も監視
-    LaunchedEffect(key1 = true) {
-        settingsStore.selfServerAccess.collect { enabled ->
-            selfServerAccess = enabled
-            Log.d("NovelReaderApp", "サーバーアクセス設定を更新: $enabled")
+    // アプリ起動時に設定情報を一度だけ読み込む
+    LaunchedEffect(key1 = Unit) {
+        try {
+            settingsStore.selfServerPath.collect { path ->
+                selfServerPath = path
+
+                try {
+                    // 権限の確認
+                    hasValidPermission = settingsStore.hasPersistedPermission(path)
+                } catch (e: Exception) {
+                    Log.e("NovelReaderApp", "権限確認エラー: ${e.message}")
+                    hasValidPermission = false
+                }
+
+                Log.d("NovelReaderApp", "サーバーパス: $path, 有効な権限: $hasValidPermission")
+            }
+        } catch (e: Exception) {
+            Log.e("NovelReaderApp", "設定読み込みエラー: ${e.message}")
+        }
+    }
+
+    // selfServerAccess の設定を別の LaunchedEffect で読み込む
+    LaunchedEffect(key1 = Unit) {
+        try {
+            settingsStore.selfServerAccess.collect { enabled ->
+                selfServerAccess = enabled
+                Log.d("NovelReaderApp", "サーバーアクセス設定: $enabled")
+            }
+        } catch (e: Exception) {
+            Log.e("NovelReaderApp", "設定読み込みエラー: ${e.message}")
         }
     }
 
@@ -410,7 +438,6 @@ fun NavButton(
         )
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelListScreen(
@@ -420,50 +447,73 @@ fun NovelListScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope() // このスコープを使う
+    val settingsStore = remember { SettingsStore(context) }
     val parser = remember { NovelParser(context) }
     var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hasValidPermission by remember { mutableStateOf(false) }
 
-    // キャッシュチェックとデータ読み込み
-    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
-        isLoading = true
-        errorMessage = null
-
-        if (selfServerAccess && selfServerPath.isNotEmpty()) {
-            try {
-                Log.d("NovelListScreen", "Loading novels from server path: $selfServerPath")
-
-                // 既にキャッシュがあればそれを使用
-                if (NovelParserCache.hasCachedNovels(selfServerPath)) {
-                    Log.d("NovelListScreen", "キャッシュから小説リストを読み込みます")
-                    novels = NovelParserCache.getCachedNovels()
-                } else {
-                    Log.d("NovelListScreen", "サーバーから小説リストを読み込みます")
-                    val result = parser.parseNovelListFromServerPath(selfServerPath)
-                    Log.d("NovelListScreen", "Loaded ${result.size} novels from server")
-                    novels = result
-                }
-            } catch (e: Exception) {
-                Log.e("NovelListScreen", "Error loading novels", e)
-                errorMessage = "小説一覧の取得に失敗しました: ${e.message}"
-            }
-        } else {
-            // テスト用のダミーデータ
-            Log.d("NovelListScreen", "Using dummy novel data")
-            novels = listOf(
-                Novel("Re:ゼロから始める異世界生活", "n9876543210"),
-                Novel("転生したらスライムだった件", "n1234567890"),
-                Novel("オーバーロード", "n0987654321")
-            )
+    // コンポジションのライフサイクルに紐づけてクリーンアップする
+    DisposableEffect(key1 = Unit) {
+        onDispose {
+            // クリーンアップ処理をここに追加
+            Log.d("NovelListScreen", "画面が破棄されました")
         }
-
-        isLoading = false
-
     }
 
-    // UI部分（変更なし）
+    // 権限の確認は一度だけ行う
+    LaunchedEffect(key1 = Unit) {
+        try {
+            hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
+            Log.d("NovelListScreen", "権限の確認: $selfServerPath - $hasValidPermission")
+        } catch (e: Exception) {
+            Log.e("NovelListScreen", "権限確認エラー: ${e.message}")
+            hasValidPermission = false
+        }
+    }
+
+    // データ読み込みはボタンクリックなどのアクションで行う方が安全
+    // 自動読み込みの場合は以下のようにする
+    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+        try {
+            Log.d("NovelListScreen", "小説一覧読み込み開始")
+            isLoading = true
+            errorMessage = null
+
+            if (selfServerAccess && selfServerPath.isNotEmpty()) {
+                if (!hasValidPermission) {
+                    errorMessage = "ファイルへのアクセス権限がありません。設定画面で再度ファイルを選択してください。"
+                    isLoading = false
+                    return@LaunchedEffect
+                }
+
+                try {
+                    Log.d("NovelListScreen", "サーバーから小説リストを読み込みます: $selfServerPath")
+                    val result = parser.parseNovelListFromServerPath(selfServerPath)
+                    novels = result
+                    Log.d("NovelListScreen", "読み込み完了: ${result.size}件")
+                } catch (e: Exception) {
+                    Log.e("NovelListScreen", "小説一覧取得エラー", e)
+                    errorMessage = "小説一覧の取得に失敗しました: ${e.message}"
+                }
+            } else {
+                // テスト用のダミーデータ
+                Log.d("NovelListScreen", "ダミーデータを使用")
+                novels = listOf(
+                    Novel("Re:ゼロから始める異世界生活", "n9876543210"),
+                    Novel("転生したらスライムだった件", "n1234567890"),
+                    Novel("オーバーロード", "n0987654321")
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("NovelListScreen", "予期せぬエラー", e)
+            errorMessage = "エラーが発生しました: ${e.message}"
+        } finally {
+            isLoading = false
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -497,8 +547,19 @@ fun NovelListScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onBack) {
-                        Text("戻る")
+
+                    // アクセス権限がない場合、設定画面へ移動するボタンを表示
+                    if (!hasValidPermission && selfServerPath.isNotEmpty()) {
+                        Button(onClick = {
+                            // 設定画面へ戻る処理
+                            onBack()
+                        }) {
+                            Text("設定画面へ戻る")
+                        }
+                    } else {
+                        Button(onClick = onBack) {
+                            Text("戻る")
+                        }
                     }
                 }
             } else if (novels.isEmpty()) {

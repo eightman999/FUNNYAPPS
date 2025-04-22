@@ -1,6 +1,7 @@
 package com.shunlight_library.nr_reader
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
@@ -166,7 +167,21 @@ class SettingsStore(private val context: Context) {
             preferences[SELF_SERVER_PATH_KEY] = path
         }
     }
+    // SettingsStore.kt に追加
+// 永続的なアクセス権限を持つURIを取得
+    fun getPersistedUriPermissions(): List<Uri> {
+        return context.contentResolver.persistedUriPermissions.map { it.uri }
+    }
 
+    // 指定されたURIが永続的なアクセス権限を持っているか確認
+    fun hasPersistedPermission(uriString: String): Boolean {
+        if (uriString.isEmpty()) return false
+
+        val targetUri = Uri.parse(uriString)
+        return context.contentResolver.persistedUriPermissions.any {
+            it.uri == targetUri && it.isReadPermission
+        }
+    }
 
     // Helper function to save all settings at once
 // これを次のように変更します：

@@ -3,6 +3,7 @@ package com.shunlight_library.nr_reader
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -57,6 +58,7 @@ fun SettingsScreen(
     }
 
     // ファイル選択のランチャー
+    // ファイル選択時に永続的な権限を取得するよう修正
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -66,8 +68,15 @@ fun SettingsScreen(
                 val path = uri.toString()
                 selfServerPath = path
 
-                // デバッグ情報をログに出力するなどの処理を行うことができます
-                // Log.d("SettingsScreen", "Selected file: $path")
+                // 永続的な権限を取得
+                val contentResolver = context.contentResolver
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+                // 永続的な権限を付与
+                contentResolver.takePersistableUriPermission(uri, takeFlags)
+
+                Log.d("SettingsScreen", "取得した永続的なアクセス権限: $path")
             }
         }
     }
@@ -257,6 +266,9 @@ fun SettingsScreen(
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = "text/html"  // HTML形式のファイルのみ表示
+                                // 永続的な権限を要求するフラグを追加
+                                addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
                             filePickerLauncher.launch(intent)
                         },

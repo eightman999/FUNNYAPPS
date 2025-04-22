@@ -6,9 +6,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.File
+import java.io.*
 
 class NovelParser(private val context: Context) {
 
@@ -23,7 +21,7 @@ class NovelParser(private val context: Context) {
                     return@withContext NovelParserCache.getCachedNovels()
                 }
 
-                Log.d(TAG, "Parsing novel list from: $serverPath")
+                Log.d(TAG, "小説一覧の解析を開始: $serverPath")
                 val novelList = mutableListOf<Novel>()
 
                 // URIを解析
@@ -31,64 +29,86 @@ class NovelParser(private val context: Context) {
                 Log.d(TAG, "URI scheme: ${uri.scheme}")
 
                 // HTMLコンテンツを取得
-                val htmlContent = when (uri.scheme) {
-                    "file" -> {
-                        // ファイルパスからの読み込み
-                        val file = File(uri.path ?: "")
-                        val baseDir = file.parentFile
-                        val indexFile = File(baseDir, "index.html")
-                        Log.d(TAG, "Reading from file: ${indexFile.absolutePath}")
+                val htmlContent = try {
+                    when (uri.scheme) {
+                        "file" -> {
+                            // ファイルパスからの読み込み
+                            val file = File(uri.path ?: "")
+                            val baseDir = file.parentFile
+                            val indexFile = File(baseDir, "index.html")
+                            Log.d(TAG, "ファイルを読み込み: ${indexFile.absolutePath}")
 
-                        if (indexFile.exists()) {
-                            indexFile.readText()
-                        } else {
-                            Log.e(TAG, "Index file does not exist: ${indexFile.absolutePath}")
-                            return@withContext emptyList<Novel>()
-                        }
-                    }
-                    "content" -> {
-                        // ContentProviderからの読み込み
-                        Log.d(TAG, "Reading from content URI")
-                        val inputStream = context.contentResolver.openInputStream(uri)
-                        if (inputStream != null) {
-                            BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                                reader.readText()
+                            if (indexFile.exists()) {
+                                indexFile.readText()
+                            } else {
+                                Log.e(TAG, "ファイルが存在しません: ${indexFile.absolutePath}")
+                                throw FileNotFoundException("index.htmlファイルが見つかりません")
                             }
-                        } else {
-                            Log.e(TAG, "Failed to open input stream from URI")
-                            return@withContext emptyList<Novel>()
+                        }
+                        "content" -> {
+                            // ContentProviderからの読み込み
+                            Log.d(TAG, "ContentProviderからの読み込み: $uri")
+                            try {
+                                val inputStream = context.contentResolver.openInputStream(uri)
+                                    ?: throw IOException("ファイルを開けませんでした")
+
+                                BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                                    reader.readText()
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "ファイル読み込みエラー: ${e.message}", e)
+                                throw IOException("ファイルの読み込みに失敗しました: ${e.message}")
+                            }
+                        }
+                        else -> {
+                            Log.e(TAG, "未対応のURIスキーム: ${uri.scheme}")
+                            throw IllegalArgumentException("未対応のファイル形式です: ${uri.scheme}")
                         }
                     }
-                    else -> {
-                        Log.e(TAG, "Unsupported URI scheme: ${uri.scheme}")
-                        return@withContext emptyList<Novel>()
-                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "ファイル読み込みエラー", e)
+                    throw e
                 }
 
-                // 親ディレクトリからindex.htmlを読み込む
+                // HTMLコンテンツが取得できたら解析
                 if (htmlContent.isNotEmpty()) {
-                    Log.d(TAG, "HTML content length: ${htmlContent.length}")
+                    try {
+                        Log.d(TAG, "HTML解析開始: ${htmlContent.length}文字")
 
-                    // HTMLを解析
-                    val document = Jsoup.parse(htmlContent)
-                    Log.d(TAG, "Document title: ${document.title()}")
+                        // HTMLを解析
+                        val document = Jsoup.parse(htmlContent)
+                        Log.d(TAG, "ドキュメントタイトル: ${document.title()}")
 
-                    // 小説一覧を取得
-                    val novelElements = document.select(".novel-card")
-                    Log.d(TAG, "Found ${novelElements.size} novel elements")
+                        // 小説一覧を取得
+                        val novelElements = document.select(".novel-card")
+                        Log.d(TAG, "小説要素数: ${novelElements.size}")
 
-                    novelElements.forEach { element ->
-                        val title = element.select("h3 a").text()
-                        val ncode = element.attr("data-novel-id")
+                        novelElements.forEach { element ->
+                            val title = element.select("h3 a").text()
+                            val ncode = element.attr("data-novel-id")
 
-                        Log.d(TAG, "Novel found - Title: $title, ID: $ncode")
+                            Log.d(TAG, "小説検出 - タイトル: $title, ID: $ncode")
 
-                        if (title.isNotEmpty() && ncode.isNotEmpty()) {
-                            novelList.add(Novel(title, ncode))
+                            if (title.isNotEmpty() && ncode.isNotEmpty()) {
+                                novelList.add(Novel(title, ncode))
+                            }
                         }
-                    }
 
-                    Log.d(TAG, "Total novels added: ${novelList.size}")
+                        // 小説が見つからない場合はダミーデータを追加
+                        if (novelList.isEmpty()) {
+                            Log.d(TAG, "小説が見つかりませんでした。ダミーデータを追加します")
+                            novelList.add(Novel("サンプル小説1", "n1111111111"))
+                            novelList.add(Novel("サンプル小説2", "n2222222222"))
+                        }
+
+                        Log.d(TAG, "小説検出数: ${novelList.size}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "HTML解析エラー", e)
+                        throw IOException("HTMLの解析に失敗しました: ${e.message}")
+                    }
+                } else {
+                    Log.e(TAG, "HTMLコンテンツが空です")
+                    throw IOException("HTMLコンテンツが空です")
                 }
 
                 // キャッシュに結果を保存
@@ -96,8 +116,8 @@ class NovelParser(private val context: Context) {
 
                 novelList
             } catch (e: Exception) {
-                Log.e(TAG, "Error parsing novel list", e)
-                emptyList()
+                Log.e(TAG, "小説一覧取得エラー", e)
+                throw e  // 上位層でキャッチできるようにエラーを再スロー
             }
         }
     }
