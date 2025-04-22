@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,8 +34,10 @@ import androidx.core.view.WindowCompat
 import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
 import com.shunlight_library.nr_reader.ui.theme.NRreaderTheme
 import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -99,24 +102,29 @@ fun NovelReaderApp() {
     // アプリ起動時に設定情報を一度だけ読み込む
     LaunchedEffect(key1 = Unit) {
         try {
-            settingsStore.selfServerPath.collect { path ->
-                selfServerPath = path
+            // 保存されている権限の有効性を確認
+            settingsStore.validatePersistedPermissions()
 
-                try {
-                    // 権限の確認
-                    hasValidPermission = settingsStore.hasPersistedPermission(path)
-                } catch (e: Exception) {
-                    Log.e("NovelReaderApp", "権限確認エラー: ${e.message}")
-                    hasValidPermission = false
+            // サーバーパスの権限がある場合は確認
+            if (selfServerPath.isNotEmpty()) {
+                hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
+                Log.d("NovelReaderApp", "保存されているパスの権限確認: $hasValidPermission")
+
+                // 権限がない場合はトーストでユーザーに通知
+                if (!hasValidPermission && selfServerAccess) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "自己サーバーへのアクセス権限がありません。設定画面で再設定してください。",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
-
-                Log.d("NovelReaderApp", "サーバーパス: $path, 有効な権限: $hasValidPermission")
             }
         } catch (e: Exception) {
-            Log.e("NovelReaderApp", "設定読み込みエラー: ${e.message}")
+            Log.e("NovelReaderApp", "権限検証エラー: ${e.message}", e)
         }
     }
-
     // selfServerAccess の設定を別の LaunchedEffect で読み込む
     LaunchedEffect(key1 = Unit) {
         try {

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -73,10 +74,27 @@ fun SettingsScreen(
                 val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
-                // 永続的な権限を付与
-                contentResolver.takePersistableUriPermission(uri, takeFlags)
+                try {
+                    // 永続的な権限を付与
+                    contentResolver.takePersistableUriPermission(uri, takeFlags)
+                    Log.d("SettingsScreen", "取得した永続的なアクセス権限: $path")
 
-                Log.d("SettingsScreen", "取得した永続的なアクセス権限: $path")
+                    // 権限が正しく取得できたか確認
+                    val hasPermission = contentResolver.persistedUriPermissions.any {
+                        it.uri == uri && it.isReadPermission && it.isWritePermission
+                    }
+
+                    if (hasPermission) {
+                        // 成功メッセージをトーストで表示
+                        Toast.makeText(context, "ディレクトリへのアクセス権限を取得しました", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // 権限取得失敗の場合
+                        Toast.makeText(context, "アクセス権限の取得に失敗しました", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e("SettingsScreen", "権限取得エラー: ${e.message}", e)
+                    Toast.makeText(context, "アクセス権限の取得中にエラーが発生しました", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -254,21 +272,28 @@ fun SettingsScreen(
                     // 選択されたパスがある場合は表示
                     if (selfServerPath.isNotEmpty()) {
                         Text(
-                            text = "選択されたファイル: $selfServerPath",
+                            text = "選択されたディレクトリ: $selfServerPath",
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                     }
 
+                    Text(
+                        text = "小説サーバーのrootディレクトリを選択してください。\nindex.htmlファイルおよびnovelsディレクトリが含まれるフォルダを選んでください。",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+
                     Button(
                         onClick = {
                             // ファイル選択インテントを起動
-                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                type = "text/html"  // HTML形式のファイルのみ表示
-                                // 永続的な権限を要求するフラグを追加
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                                // ディレクトリ選択に変更（ACTION_OPEN_DOCUMENT_TREEを使用）
+                                // ドキュメントツリー全体への永続的な権限を要求
                                 addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                                addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION) // プレフィックスURIへの権限も取得
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                             }
                             filePickerLauncher.launch(intent)
                         },
@@ -276,21 +301,15 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        Text("index.htmlを選択")
+                        Text("ディレクトリを選択")
                     }
-
-                    Text(
-                        text = "自己サーバーのindex.htmlファイルを選択してください",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             // Save Button
-        Button(
+            Button(
                 onClick = {
                     scope.launch {
                         settingsStore.saveAllSettings(
@@ -309,11 +328,9 @@ fun SettingsScreen(
             ) {
                 Text("設定を保存")
             }
-
         }
     }
 }
-
 @Composable
 fun SettingSection(
     title: String,

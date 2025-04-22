@@ -2,6 +2,7 @@ package com.shunlight_library.nr_reader
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
@@ -173,13 +174,51 @@ class SettingsStore(private val context: Context) {
         return context.contentResolver.persistedUriPermissions.map { it.uri }
     }
 
-    // 指定されたURIが永続的なアクセス権限を持っているか確認
+
+    // 指定されたURIが永続的なアクセス権限を持っているか確認（読み書き両方）
     fun hasPersistedPermission(uriString: String): Boolean {
         if (uriString.isEmpty()) return false
 
-        val targetUri = Uri.parse(uriString)
-        return context.contentResolver.persistedUriPermissions.any {
-            it.uri == targetUri && it.isReadPermission
+        try {
+            val targetUri = Uri.parse(uriString)
+            return context.contentResolver.persistedUriPermissions.any {
+                it.uri == targetUri && it.isReadPermission && it.isWritePermission
+            }
+        } catch (e: Exception) {
+            Log.e("SettingsStore", "権限確認エラー: ${e.message}", e)
+            return false
+        }
+    }
+
+    // 永続的な権限を持つURIが有効期限切れでないか確認
+    fun validatePersistedPermissions() {
+        val invalidPermissions = mutableListOf<Uri>()
+
+        // 現在保持している永続的権限のリストを取得
+        val permissions = context.contentResolver.persistedUriPermissions
+
+        for (permission in permissions) {
+            try {
+                // URIが有効かチェック（ファイルが存在するか確認）
+                val uri = permission.uri
+                val canAccess = try {
+                    context.contentResolver.getType(uri) != null
+                } catch (e: Exception) {
+                    false
+                }
+
+                if (!canAccess) {
+                    invalidPermissions.add(uri)
+                    Log.d("SettingsStore", "無効な権限を検出: $uri")
+                }
+            } catch (e: Exception) {
+                Log.e("SettingsStore", "権限検証エラー: ${e.message}", e)
+            }
+        }
+
+        // 無効な権限があれば記録
+        if (invalidPermissions.isNotEmpty()) {
+            Log.d("SettingsStore", "${invalidPermissions.size}個の無効な権限が見つかりました")
         }
     }
 

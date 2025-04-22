@@ -2,7 +2,9 @@ package com.shunlight_library.nr_reader
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
@@ -25,6 +27,9 @@ class NovelParser(private val context: Context) {
                 val novelList = mutableListOf<Novel>()
 
                 // URIを解析
+// NovelParser.ktのparseNovelListFromServerPath関数内のURI処理部分を修正
+
+// URIを解析
                 val uri = Uri.parse(serverPath)
                 Log.d(TAG, "URI scheme: ${uri.scheme}")
 
@@ -48,8 +53,21 @@ class NovelParser(private val context: Context) {
                         "content" -> {
                             // ContentProviderからの読み込み
                             Log.d(TAG, "ContentProviderからの読み込み: $uri")
+
+                            // DocumentFileを使用してより安全にアクセス
+                            val documentFile = DocumentFile.fromTreeUri(context, uri)
+                            if (documentFile == null || !documentFile.exists()) {
+                                throw IOException("指定されたディレクトリにアクセスできません")
+                            }
+
+                            // index.htmlファイルを探す
+                            val indexFile = documentFile.findFile("index.html")
+                            if (indexFile == null || !indexFile.exists()) {
+                                throw IOException("index.htmlファイルが見つかりません")
+                            }
+
                             try {
-                                val inputStream = context.contentResolver.openInputStream(uri)
+                                val inputStream = context.contentResolver.openInputStream(indexFile.uri)
                                     ?: throw IOException("ファイルを開けませんでした")
 
                                 BufferedReader(InputStreamReader(inputStream)).use { reader ->
@@ -166,6 +184,48 @@ class NovelParser(private val context: Context) {
 
         return novels.map { novel ->
             calculateUnreadCount(serverPath, novel)
+        }
+    }
+    private suspend fun findIndexHtmlInTree(context: Context, treeUri: Uri): Uri? {
+        return withContext(Dispatchers.IO) {
+            try {
+                // ツリールートのドキュメントIDを取得
+                val docId = DocumentsContract.getTreeDocumentId(treeUri)
+
+                // ルートディレクトリのURIを構築
+                val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+
+                // ルートディレクトリ内のファイル一覧を取得
+                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, docId)
+
+                context.contentResolver.query(
+                    childrenUri,
+                    arrayOf(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                    ),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val childDocId = cursor.getString(0)
+                        val displayName = cursor.getString(1)
+
+                        // index.htmlを探す
+                        if (displayName == "index.html") {
+                            return@withContext DocumentsContract.buildDocumentUriUsingTree(treeUri, childDocId)
+                        }
+                    }
+                }
+
+                // 見つからなかった場合
+                null
+
+            } catch (e: Exception) {
+                Log.e("NovelParser", "ディレクトリ探索エラー: ${e.message}")
+                null
+            }
         }
     }
 }
