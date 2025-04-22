@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
@@ -169,10 +170,20 @@ class SettingsStore(private val context: Context) {
         }
     }
     // SettingsStore.kt に追加
-// 永続的なアクセス権限を持つURIを取得
+    // 永続的なアクセス権限を持つURIを取得
     fun getPersistedUriPermissions(): List<Uri> {
         return context.contentResolver.persistedUriPermissions.map { it.uri }
     }
+    // 自己サーバーアクセス設定の確認メソッドを追加
+    suspend fun isSelfServerAccessEnabled(): Boolean {
+        return selfServerAccess.first()
+    }
+
+    // 自己サーバーパスの確認メソッドを追加
+    suspend fun getSelfServerPath(): String {
+        return selfServerPath.first()
+    }
+
 
 
     // 指定されたURIが永続的なアクセス権限を持っているか確認（読み書き両方）
@@ -180,10 +191,23 @@ class SettingsStore(private val context: Context) {
         if (uriString.isEmpty()) return false
 
         try {
-            val targetUri = Uri.parse(uriString)
-            return context.contentResolver.persistedUriPermissions.any {
-                it.uri == targetUri && it.isReadPermission && it.isWritePermission
+            // 権限チェックログ
+            Log.d("SettingsStore", "URIの権限をチェック: $uriString")
+
+            // "file://"スキームの場合は常にtrueを返す（通常のファイルシステムアクセス）
+            if (uriString.startsWith("file://")) {
+                Log.d("SettingsStore", "fileスキームなので権限はあります")
+                return true
             }
+
+            val targetUri = Uri.parse(uriString)
+            val hasPermission = context.contentResolver.persistedUriPermissions.any {
+                it.uri == targetUri && it.isReadPermission
+            }
+
+            Log.d("SettingsStore", "権限チェック結果: $hasPermission")
+            return hasPermission
+
         } catch (e: Exception) {
             Log.e("SettingsStore", "権限確認エラー: ${e.message}", e)
             return false
@@ -223,7 +247,8 @@ class SettingsStore(private val context: Context) {
     }
 
     // Helper function to save all settings at once
-// これを次のように変更します：
+
+    // 設定を一括で保存するメソッドを改善
     suspend fun saveAllSettings(
         themeMode: String,
         fontFamily: String,
@@ -231,16 +256,24 @@ class SettingsStore(private val context: Context) {
         backgroundColor: String,
         selfServerAccess: Boolean,
         textOrientation: String,
-        selfServerPath: String = "" // デフォルト値を追加
+        selfServerPath: String = ""
     ) {
-        context.dataStore.edit { preferences ->
-            preferences[THEME_MODE] = themeMode
-            preferences[FONT_FAMILY] = fontFamily
-            preferences[FONT_SIZE] = fontSize
-            preferences[BACKGROUND_COLOR] = backgroundColor
-            preferences[SELF_SERVER_ACCESS] = selfServerAccess
-            preferences[TEXT_ORIENTATION] = textOrientation
-            preferences[SELF_SERVER_PATH_KEY] = selfServerPath // 新しいパラメータの保存
+        try {
+            context.dataStore.edit { preferences ->
+                preferences[THEME_MODE] = themeMode
+                preferences[FONT_FAMILY] = fontFamily
+                preferences[FONT_SIZE] = fontSize
+                preferences[BACKGROUND_COLOR] = backgroundColor
+                preferences[SELF_SERVER_ACCESS] = selfServerAccess
+                preferences[TEXT_ORIENTATION] = textOrientation
+                preferences[SELF_SERVER_PATH_KEY] = selfServerPath
+
+                // 保存ログ
+                Log.d("SettingsStore", "設定を保存しました: selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+            }
+        } catch (e: Exception) {
+            Log.e("SettingsStore", "設定保存エラー: ${e.message}", e)
+            throw e  // エラーを上位に伝播させる
         }
     }
 }

@@ -26,8 +26,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -312,16 +314,36 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        settingsStore.saveAllSettings(
-                            themeMode = themeMode,
-                            fontFamily = fontFamily,
-                            fontSize = fontSize,
-                            backgroundColor = backgroundColor,
-                            selfServerAccess = selfServerAccess,
-                            textOrientation = textOrientation,
-                            selfServerPath = selfServerPath // 追加
-                        )
-                        onBack()
+                        try {
+                            // 設定を保存
+                            settingsStore.saveAllSettings(
+                                themeMode = themeMode,
+                                fontFamily = fontFamily,
+                                fontSize = fontSize,
+                                backgroundColor = backgroundColor,
+                                selfServerAccess = selfServerAccess,
+                                textOrientation = textOrientation,
+                                selfServerPath = selfServerPath
+                            )
+
+                            // 保存確認ログ
+                            Log.d("SettingsScreen", "設定を保存しました: selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+
+                            // 保存したことをユーザーに通知
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "設定を保存しました", Toast.LENGTH_SHORT).show()
+                            }
+
+                            // キャッシュをクリア
+                            NovelParserCache.clearCache()
+
+                            onBack()
+                        } catch (e: Exception) {
+                            Log.e("SettingsScreen", "設定保存エラー: ${e.message}", e)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "設定の保存に失敗しました: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

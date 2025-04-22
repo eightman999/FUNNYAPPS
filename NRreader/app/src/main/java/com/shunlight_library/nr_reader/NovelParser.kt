@@ -27,115 +27,146 @@ class NovelParser(private val context: Context) {
                 val novelList = mutableListOf<Novel>()
 
                 // URIを解析
-// NovelParser.ktのparseNovelListFromServerPath関数内のURI処理部分を修正
-
-// URIを解析
                 val uri = Uri.parse(serverPath)
                 Log.d(TAG, "URI scheme: ${uri.scheme}")
 
-                // HTMLコンテンツを取得
-                val htmlContent = try {
-                    when (uri.scheme) {
-                        "file" -> {
-                            // ファイルパスからの読み込み
-                            val file = File(uri.path ?: "")
-                            val baseDir = file.parentFile
-                            val indexFile = File(baseDir, "index.html")
-                            Log.d(TAG, "ファイルを読み込み: ${indexFile.absolutePath}")
+                // 直接novelsディレクトリをスキャンする方法を優先
+                when (uri.scheme) {
+                    "file" -> {
+                        // ファイルパスからの読み込み
+                        val file = File(uri.path ?: "")
+                        val baseDir = file.parentFile
+                        val novelsDir = File(baseDir, "novels")
 
-                            if (indexFile.exists()) {
-                                indexFile.readText()
-                            } else {
-                                Log.e(TAG, "ファイルが存在しません: ${indexFile.absolutePath}")
-                                throw FileNotFoundException("index.htmlファイルが見つかりません")
-                            }
-                        }
-                        "content" -> {
-                            // ContentProviderからの読み込み
-                            Log.d(TAG, "ContentProviderからの読み込み: $uri")
+                        if (novelsDir.exists() && novelsDir.isDirectory) {
+                            Log.d(TAG, "novelsディレクトリを検出: ${novelsDir.absolutePath}")
+                            val novelDirs = novelsDir.listFiles { file -> file.isDirectory }
 
-                            // DocumentFileを使用してより安全にアクセス
-                            val documentFile = DocumentFile.fromTreeUri(context, uri)
-                            if (documentFile == null || !documentFile.exists()) {
-                                throw IOException("指定されたディレクトリにアクセスできません")
-                            }
+                            novelDirs?.forEach { dir ->
+                                try {
+                                    val ncode = dir.name
+                                    Log.d(TAG, "小説ディレクトリを検出: $ncode")
 
-                            // index.htmlファイルを探す
-                            val indexFile = documentFile.findFile("index.html")
-                            if (indexFile == null || !indexFile.exists()) {
-                                throw IOException("index.htmlファイルが見つかりません")
-                            }
+                                    // index.htmlからタイトルを取得
+                                    val indexFile = File(dir, "index.html")
+                                    if (indexFile.exists()) {
+                                        val novelHtml = indexFile.readText()
+                                        val doc = Jsoup.parse(novelHtml)
 
-                            try {
-                                val inputStream = context.contentResolver.openInputStream(indexFile.uri)
-                                    ?: throw IOException("ファイルを開けませんでした")
+                                        // 2つの方法でタイトルを探す
+                                        var title = doc.title()
 
-                                BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                                    reader.readText()
+                                        // タイトルが見つからない場合はh1タグを探す
+                                        if (title.isBlank() || title == "Document") {
+                                            title = doc.select("h1").firstOrNull()?.text() ?: "無題の小説"
+                                        }
+
+                                        // エピソードファイルの数をカウント
+                                        val episodeFiles = dir.listFiles { file ->
+                                            file.name.startsWith("episode_") && file.name.endsWith(".html")
+                                        }
+                                        val episodeCount = episodeFiles?.size ?: 0
+
+                                        Log.d(TAG, "小説情報: タイトル=$title, エピソード数=$episodeCount")
+                                        novelList.add(Novel(
+                                            title = title,
+                                            ncode = ncode,
+                                            totalEpisodes = episodeCount
+                                        ))
+                                    } else {
+                                        Log.d(TAG, "index.htmlが見つかりません: ${indexFile.absolutePath}")
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
                                 }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "ファイル読み込みエラー: ${e.message}", e)
-                                throw IOException("ファイルの読み込みに失敗しました: ${e.message}")
                             }
-                        }
-                        else -> {
-                            Log.e(TAG, "未対応のURIスキーム: ${uri.scheme}")
-                            throw IllegalArgumentException("未対応のファイル形式です: ${uri.scheme}")
+                        } else {
+                            Log.e(TAG, "novelsディレクトリが見つかりません: ${novelsDir.absolutePath}")
+                            throw FileNotFoundException("novelsディレクトリが見つかりません")
                         }
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "ファイル読み込みエラー", e)
-                    throw e
+                    "content" -> {
+                        // ContentProviderからの読み込み
+                        Log.d(TAG, "ContentProviderからの読み込み: $uri")
+
+                        val documentFile = DocumentFile.fromTreeUri(context, uri)
+                        if (documentFile == null || !documentFile.exists()) {
+                            throw IOException("指定されたディレクトリにアクセスできません")
+                        }
+
+                        // novelsディレクトリを探す
+                        val novelsDir = documentFile.findFile("novels")
+                        if (novelsDir != null && novelsDir.exists()) {
+                            Log.d(TAG, "novelsディレクトリを検出")
+                            val novelDirs = novelsDir.listFiles()
+
+                            novelDirs.forEach { dir ->
+                                if (dir.isDirectory) {
+                                    try {
+                                        val ncode = dir.name
+                                        Log.d(TAG, "小説ディレクトリを検出: $ncode")
+
+                                        // index.htmlからタイトルを取得
+                                        val indexFile = dir.findFile("index.html")
+                                        if (indexFile != null && indexFile.exists()) {
+                                            val inputStream = context.contentResolver.openInputStream(indexFile.uri)
+                                            val novelHtml = BufferedReader(InputStreamReader(inputStream)).use { it.readText() }
+                                            val doc = Jsoup.parse(novelHtml)
+
+                                            // 2つの方法でタイトルを探す
+                                            var title = doc.title()
+
+                                            // タイトルが見つからない場合はh1タグを探す
+                                            if (title.isBlank() || title == "Document") {
+                                                title = doc.select("h1").firstOrNull()?.text() ?: "無題の小説"
+                                            }
+
+                                            // エピソードファイルの数をカウント
+                                            val episodeFiles = dir.listFiles().filter { file ->
+                                                val fileName = file.name
+                                                fileName!!.startsWith("episode_") && fileName!!.endsWith(".html")
+                                            }
+                                            val episodeCount = episodeFiles.size
+
+                                            Log.d(TAG, "小説情報: タイトル=$title, エピソード数=$episodeCount")
+                                            novelList.add(Novel(
+                                                title = title,
+                                                ncode = ncode.toString(),
+                                                totalEpisodes = episodeCount
+                                            ))
+                                        } else {
+                                            Log.d(TAG, "index.htmlが見つかりません: $ncode")
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
+                                    }
+                                }
+                            }
+                        } else {
+                            Log.e(TAG, "novelsディレクトリが見つかりません")
+                            throw FileNotFoundException("novelsディレクトリが見つかりません")
+                        }
+                    }
+                    else -> {
+                        Log.e(TAG, "未対応のURIスキーム: ${uri.scheme}")
+                        throw IllegalArgumentException("未対応のファイル形式です: ${uri.scheme}")
+                    }
                 }
 
-                // HTMLコンテンツが取得できたら解析
-                if (htmlContent.isNotEmpty()) {
-                    try {
-                        Log.d(TAG, "HTML解析開始: ${htmlContent.length}文字")
-
-                        // HTMLを解析
-                        val document = Jsoup.parse(htmlContent)
-                        Log.d(TAG, "ドキュメントタイトル: ${document.title()}")
-
-                        // 小説一覧を取得
-                        val novelElements = document.select(".novel-card")
-                        Log.d(TAG, "小説要素数: ${novelElements.size}")
-
-                        novelElements.forEach { element ->
-                            val title = element.select("h3 a").text()
-                            val ncode = element.attr("data-novel-id")
-
-                            Log.d(TAG, "小説検出 - タイトル: $title, ID: $ncode")
-
-                            if (title.isNotEmpty() && ncode.isNotEmpty()) {
-                                novelList.add(Novel(title, ncode))
-                            }
-                        }
-
-                        // 小説が見つからない場合はダミーデータを追加
-                        if (novelList.isEmpty()) {
-                            Log.d(TAG, "小説が見つかりませんでした。ダミーデータを追加します")
-                            novelList.add(Novel("サンプル小説1", "n1111111111"))
-                            novelList.add(Novel("サンプル小説2", "n2222222222"))
-                        }
-
-                        Log.d(TAG, "小説検出数: ${novelList.size}")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "HTML解析エラー", e)
-                        throw IOException("HTMLの解析に失敗しました: ${e.message}")
-                    }
-                } else {
-                    Log.e(TAG, "HTMLコンテンツが空です")
-                    throw IOException("HTMLコンテンツが空です")
+                // 小説リストが空の場合
+                if (novelList.isEmpty()) {
+                    Log.d(TAG, "小説が見つかりませんでした")
+                    throw FileNotFoundException("小説が見つかりませんでした")
                 }
 
                 // キャッシュに結果を保存
                 NovelParserCache.cacheNovels(serverPath, novelList)
+                Log.d(TAG, "小説リストをキャッシュしました: ${novelList.size}件")
 
                 novelList
             } catch (e: Exception) {
                 Log.e(TAG, "小説一覧取得エラー", e)
-                throw e  // 上位層でキャッチできるようにエラーを再スロー
+                throw e
             }
         }
     }

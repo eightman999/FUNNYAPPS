@@ -2,8 +2,11 @@ package com.shunlight_library.nr_reader
 
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.util.Log
 import android.view.WindowManager
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -91,6 +94,27 @@ fun NovelReaderApp() {
     var selfServerAccess by remember { mutableStateOf(false) }
     var hasValidPermission by remember { mutableStateOf(false) }
 
+
+    // 重要：設定をちゃんと読み込む
+    LaunchedEffect(key1 = Unit) {
+        try {
+            // 現在の設定値を取得
+            selfServerAccess = settingsStore.selfServerAccess.first()
+            selfServerPath = settingsStore.selfServerPath.first()
+
+            // 読み込み確認用ログ
+            Log.d("NovelReaderApp", "設定読み込み: selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+
+            // 保存されている権限の有効性を確認
+            if (selfServerPath.isNotEmpty()) {
+                hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
+                Log.d("NovelReaderApp", "保存されているパスの権限確認: $hasValidPermission")
+            }
+        } catch (e: Exception) {
+            Log.e("NovelReaderApp", "設定読み込みエラー: ${e.message}", e)
+        }
+    }
+
     // DisposableEffect を追加
     DisposableEffect(key1 = Unit) {
         onDispose {
@@ -148,25 +172,42 @@ fun NovelReaderApp() {
             selfServerAccess = selfServerAccess,
             onNovelSelected = { novel ->
                 if (selfServerAccess && selfServerPath.isNotEmpty()) {
+                    // 自己サーバーモードの場合、常にローカルファイルを参照する
                     val uri = Uri.parse(selfServerPath)
-                    val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
-                    val novelUrl = "file://$baseDir/novels/${novel.ncode}/index.html"
+                    val novelUrl = when (uri.scheme) {
+                        "file" -> {
+                            // ファイルパスの場合
+                            val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
+                            "file://$baseDir/novels/${novel.ncode}/index.html"
+                        }
+                        "content" -> {
+                            // DocumentsProviderからのアクセスパスを構築
+                            // ※ここではURIを文字列として組み立て
+                            val docId = DocumentsContract.getTreeDocumentId(uri)
+                            val childPath = "$docId/novels/${novel.ncode}/index.html"
+                            val documentUri = DocumentsContract.buildDocumentUriUsingTree(uri, childPath)
+                            documentUri.toString()
+                        }
+                        else -> {
+                            // サポートされていないスキームの場合はエラーメッセージを表示
+                            Toast.makeText(context, "サポートされていないファイル形式です", Toast.LENGTH_SHORT).show()
+                            return@NovelListScreen
+                        }
+                    }
+
                     currentTitle = novel.title
                     currentUrl = novelUrl
                     showWebView = true
                     showNovelList = false
-
-                    // 選択された小説オブジェクトも保存
                     currentNovel = novel
+
+                    Log.d("NovelReaderApp", "ローカルファイルのURLを構築: $novelUrl")
                 } else {
-                    // 小説をオンラインで開く
-                    currentTitle = novel.title
-                    currentUrl = "https://ncode.syosetu.com/${novel.ncode}/"
-                    showWebView = true
-                    showNovelList = false
-
-                    // 選択された小説オブジェクトも保存
-                    currentNovel = novel
+                    // 自己サーバーモードが無効の場合はオンラインモード
+                    // この部分も自己サーバーを強制する場合は変更
+                    Toast.makeText(context, "自己サーバーモードが無効です。設定を確認してください。", Toast.LENGTH_SHORT).show()
+                    // アクセスをブロック
+                    return@NovelListScreen
                 }
             },
             onBack = { showNovelList = false }
@@ -432,6 +473,15 @@ fun WebViewScreen(url: String, novel: Novel? = null) {
     val application = context.applicationContext as NovelReaderApplication
     val repository = application.repository
     val scope = rememberCoroutineScope()
+    val settingsStore = remember { SettingsStore(context) }
+
+    // 設定情報を取得
+    var selfServerPath by remember { mutableStateOf("") }
+
+    // 設定情報を読み込む
+    LaunchedEffect(key1 = Unit) {
+        selfServerPath = settingsStore.selfServerPath.first()
+    }
 
     // URLからエピソード番号を抽出する関数
     fun extractEpisodeNumber(url: String): Int {
@@ -445,6 +495,102 @@ fun WebViewScreen(url: String, novel: Novel? = null) {
         factory = { context ->
             WebView(context).apply {
                 webViewClient = object : WebViewClient() {
+                    // URLをインターセプトして書き換え
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView,
+                        request: WebResourceRequest
+                    ): Boolean {
+                        val requestUrl = request.url.toString()
+
+                        // novel オブジェクトがnullでなければ処理を行う
+                        if (novel != null) {
+                            Log.d("WebViewScreen", "リクエストURL: $requestUrl")
+
+                            // エピソードへのリンクかどうかをチェック（小説サイト内の移動を検出）
+                            if (requestUrl.contains("ncode.syosetu.com") ||
+                                requestUrl.contains("episode_") ||
+                                requestUrl.contains("index.html")) {
+
+                                // エピソード番号またはindex.htmlへの参照を抽出
+                                if (requestUrl.contains("episode_")) {
+                                    // エピソード番号を抽出
+                                    val episodeNum = extractEpisodeNumber(requestUrl)
+
+                                    // ローカルのエピソードファイルURLを構築
+                                    val uri = Uri.parse(selfServerPath)
+                                    val newUrl = when (uri.scheme) {
+                                        "file" -> {
+                                            val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
+                                            "file://$baseDir/novels/${novel.ncode}/episode_$episodeNum.html"
+                                        }
+                                        "content" -> {
+                                            val docId = DocumentsContract.getTreeDocumentId(uri)
+                                            val childPath = "$docId/novels/${novel.ncode}/episode_$episodeNum.html"
+                                            DocumentsContract.buildDocumentUriUsingTree(uri, childPath).toString()
+                                        }
+                                        else -> return false
+                                    }
+
+                                    Log.d("WebViewScreen", "エピソードリンクを書き換え: $newUrl")
+                                    view.loadUrl(newUrl)
+                                    return true
+                                }
+                                // index.htmlへの参照を検出
+                                else if (requestUrl.contains("index.html") ||
+                                    (requestUrl.contains("ncode.syosetu.com") && !requestUrl.contains("/\\d+/"))) {
+
+                                    // 小説のインデックスページURLを構築
+                                    val uri = Uri.parse(selfServerPath)
+                                    val newUrl = when (uri.scheme) {
+                                        "file" -> {
+                                            val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
+                                            "file://$baseDir/novels/${novel.ncode}/index.html"
+                                        }
+                                        "content" -> {
+                                            val docId = DocumentsContract.getTreeDocumentId(uri)
+                                            val childPath = "$docId/novels/${novel.ncode}/index.html"
+                                            DocumentsContract.buildDocumentUriUsingTree(uri, childPath).toString()
+                                        }
+                                        else -> return false
+                                    }
+
+                                    Log.d("WebViewScreen", "インデックスリンクを書き換え: $newUrl")
+                                    view.loadUrl(newUrl)
+                                    return true
+                                }
+                                // 小説本編ページの番号形式 (ncode.syosetu.com/nXXXXX/YY/)
+                                else if (requestUrl.matches("https://ncode.syosetu.com/${novel.ncode}/(\\d+)/?.*".toRegex())) {
+                                    // エピソード番号を抽出
+                                    val episodeRegex = "https://ncode.syosetu.com/${novel.ncode}/(\\d+)/?.*".toRegex()
+                                    val episodeMatch = episodeRegex.find(requestUrl)
+                                    val episodeNum = episodeMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+                                    // ローカルのエピソードファイルURLを構築
+                                    val uri = Uri.parse(selfServerPath)
+                                    val newUrl = when (uri.scheme) {
+                                        "file" -> {
+                                            val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
+                                            "file://$baseDir/novels/${novel.ncode}/episode_$episodeNum.html"
+                                        }
+                                        "content" -> {
+                                            val docId = DocumentsContract.getTreeDocumentId(uri)
+                                            val childPath = "$docId/novels/${novel.ncode}/episode_$episodeNum.html"
+                                            DocumentsContract.buildDocumentUriUsingTree(uri, childPath).toString()
+                                        }
+                                        else -> return false
+                                    }
+
+                                    Log.d("WebViewScreen", "小説サイトのリンクをローカルに書き換え: $newUrl")
+                                    view.loadUrl(newUrl)
+                                    return true
+                                }
+                            }
+                        }
+
+                        // リンク書き換えを行わない場合
+                        return false
+                    }
+
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
 
@@ -454,17 +600,33 @@ fun WebViewScreen(url: String, novel: Novel? = null) {
                             val episodeNum = extractEpisodeNumber(url)
                             scope.launch {
                                 repository.updateLastReadEpisode(novel.ncode, episodeNum)
+                                Log.d("WebViewScreen", "最後に読んだエピソードを更新: ${novel.ncode} - エピソード $episodeNum")
                             }
                         }
                     }
                 }
                 settings.javaScriptEnabled = true
+
+                // キャッシュをクリアする
+                clearCache(true)
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+
+                // ファイルアクセスを有効化
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+
+                // 拡大縮小コントロールを有効化
+                settings.builtInZoomControls = true
+                settings.displayZoomControls = false
+
+                // URLを読み込む
                 loadUrl(url)
             }
         },
         modifier = Modifier.fillMaxSize()
     )
 }
+
 @Composable
 fun SectionHeader(title: String) {
     Box(
@@ -502,6 +664,7 @@ fun NavButton(
         )
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelListScreen(
@@ -511,7 +674,7 @@ fun NovelListScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope() // このスコープを使う
+    val scope = rememberCoroutineScope()
     val settingsStore = remember { SettingsStore(context) }
     val parser = remember { NovelParser(context) }
     var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
@@ -520,71 +683,91 @@ fun NovelListScreen(
     var hasValidPermission by remember { mutableStateOf(false) }
     val application = context.applicationContext as NovelReaderApplication
     val repository = application.repository
-    // コンポジションのライフサイクルに紐づけてクリーンアップする
-    DisposableEffect(key1 = Unit) {
-        onDispose {
-            // クリーンアップ処理をここに追加
-            Log.d("NovelListScreen", "画面が破棄されました")
-        }
-    }
 
-    // 権限の確認は一度だけ行う
-    LaunchedEffect(key1 = Unit) {
+    // 権限のチェックとデータ読み込みを分離
+    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+        Log.d("NovelListScreen", "LaunchedEffect開始 - selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+
         try {
-            hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
-            Log.d("NovelListScreen", "権限の確認: $selfServerPath - $hasValidPermission")
-        } catch (e: Exception) {
-            Log.e("NovelListScreen", "権限確認エラー: ${e.message}")
-            hasValidPermission = false
-        }
-    }
-    // 小説リポジトリの準備
-    val novelRepository = remember { NovelRepository(context) }
-    // データ読み込みはボタンクリックなどのアクションで行う方が安全
-    // 自動読み込みの場合は以下のようにする
-    // Roomデータベースから小説情報を取得
-    LaunchedEffect(key1 = Unit) {
-        try {
-            // Flowからデータを収集
-            repository.getAllNovels().collect { novelList ->
-                novels = novelList
+            // 自己サーバーの有効性チェック
+            if (!selfServerAccess || selfServerPath.isEmpty()) {
+                Log.d("NovelListScreen", "自己サーバーモードが無効またはパスが空")
+                errorMessage = "自己サーバーモードが無効です。設定画面で有効にしてください。"
                 isLoading = false
+                return@LaunchedEffect
             }
+
+            // 権限のチェック
+            hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
+            Log.d("NovelListScreen", "権限チェック: $hasValidPermission")
+
+            if (!hasValidPermission) {
+                errorMessage = "自己サーバーへのアクセス権限がありません。設定画面で再設定してください。"
+                isLoading = false
+                return@LaunchedEffect
+            }
+
+            // ここまで来たら、自己サーバーモードは有効で権限もある
+            Log.d("NovelListScreen", "自己サーバーモードは有効で権限もあります。小説データを読み込みます。")
+
+            // 小説データの読み込み
+            try {
+                // NovelParserから小説リストを取得
+                val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
+                Log.d("NovelListScreen", "取得した小説数: ${parsedNovels.size}")
+
+                if (parsedNovels.isNotEmpty()) {
+                    // 各小説のエピソード数を取得して保存
+                    val updatedNovels = mutableListOf<Novel>()
+
+                    parsedNovels.forEach { novel ->
+                        // 既存の小説データを確認
+                        val existingNovel = repository.getNovelByNcode(novel.ncode)
+                        val lastReadEpisode = existingNovel?.lastReadEpisode ?: 1
+
+                        // エピソード数を取得
+                        val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
+                        Log.d("NovelListScreen", "小説 '${novel.title}' のエピソード数: $episodeCount")
+
+                        // 新しい小説情報を作成
+                        val updatedNovel = Novel(
+                            title = novel.title,
+                            ncode = novel.ncode,
+                            totalEpisodes = episodeCount,
+                            lastReadEpisode = lastReadEpisode,
+                            unreadCount = (episodeCount - lastReadEpisode).coerceAtLeast(0)
+                        )
+
+                        // リストに追加
+                        updatedNovels.add(updatedNovel)
+
+                        // データベースに保存
+                        repository.saveNovel(updatedNovel)
+                    }
+
+                    // 画面に表示するリストを更新
+                    novels = updatedNovels
+
+                    Log.d("NovelListScreen", "すべての小説情報の更新が完了しました")
+                } else {
+                    Log.d("NovelListScreen", "取得した小説がありません")
+                    errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
+                }
+            } catch (e: Exception) {
+                Log.e("NovelListScreen", "小説情報の更新に失敗しました: ${e.message}", e)
+                errorMessage = "小説情報の更新に失敗しました: ${e.message}"
+            }
+
+            isLoading = false
+
         } catch (e: Exception) {
-            errorMessage = "データの読み込みに失敗しました: ${e.message}"
+            Log.e("NovelListScreen", "LaunchedEffect内のエラー: ${e.message}", e)
+            errorMessage = "エラーが発生しました: ${e.message}"
             isLoading = false
         }
     }
 
-    // 自己サーバーからの小説情報更新
-    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
-        if (selfServerAccess && selfServerPath.isNotEmpty()) {
-            try {
-                // NovelParserから小説リストを取得
-                val parser = NovelParser(context)
-                val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
-
-                // 各小説のエピソード数を取得して保存
-                parsedNovels.forEach { novel ->
-                    val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
-
-                    // 新しい小説情報をデータベースに保存
-                    repository.saveNovel(
-                        Novel(
-                            title = novel.title,
-                            ncode = novel.ncode,
-                            totalEpisodes = episodeCount,
-                            // 既存の小説ならlastReadEpisodeを保持、新規なら1に設定
-                            lastReadEpisode = 1
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                errorMessage = "小説情報の更新に失敗しました: ${e.message}"
-            }
-        }
-    }
-
+    // UIの構築（変更なし）
     Scaffold(
         topBar = {
             TopAppBar(
