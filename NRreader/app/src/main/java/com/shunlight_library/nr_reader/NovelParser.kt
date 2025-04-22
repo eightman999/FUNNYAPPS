@@ -126,4 +126,62 @@ class NovelParser(private val context: Context) {
     fun clearCache() {
         NovelParserCache.clearCache()
     }
+    // 特定の小説の総エピソード数を取得
+    suspend fun getNovelEpisodeCount(serverPath: String, ncode: String): Int {
+        return withContext(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse(serverPath)
+                val baseDir = File(uri.path ?: "").parentFile
+                val novelDir = File(baseDir, "novels/$ncode")
+
+                if (!novelDir.exists() || !novelDir.isDirectory) {
+                    return@withContext 0
+                }
+
+                // episode_XXXX.htmlのファイル数をカウント
+                novelDir.listFiles { file ->
+                    file.name.startsWith("episode_") && file.name.endsWith(".html")
+                }?.size ?: 0
+            } catch (e: Exception) {
+                Log.e(TAG, "エピソード数取得エラー: $ncode", e)
+                0
+            }
+        }
+    }
+
+    // 小説の未読エピソード数を計算
+    suspend fun calculateUnreadCount(serverPath: String, novel: Novel): Novel {
+        val totalEpisodes = getNovelEpisodeCount(serverPath, novel.ncode)
+        val unreadCount = (totalEpisodes - novel.lastReadEpisode).coerceAtLeast(0)
+
+        return novel.copy(
+            totalEpisodes = totalEpisodes,
+            unreadCount = unreadCount
+        )
+    }
+
+    // 小説一覧取得時に未読情報も含める
+    suspend fun parseNovelListFromServerPathWithUnreadInfo(serverPath: String): List<Novel> {
+        val novels = parseNovelListFromServerPath(serverPath)
+
+        return novels.map { novel ->
+            calculateUnreadCount(serverPath, novel)
+        }
+    }
+}
+
+
+// 3. 未読情報の永続化(SharedPreferences or Room DBを使用)
+class NovelRepository(private val context: Context) {
+    private val sharedPrefs = context.getSharedPreferences("novel_prefs", Context.MODE_PRIVATE)
+
+    // 最後に読んだエピソード番号を保存
+    fun saveLastReadEpisode(ncode: String, episodeNum: Int) {
+        sharedPrefs.edit().putInt("last_read_$ncode", episodeNum).apply()
+    }
+
+    // 最後に読んだエピソード番号を取得
+    fun getLastReadEpisode(ncode: String): Int {
+        return sharedPrefs.getInt("last_read_$ncode", 1)
+    }
 }

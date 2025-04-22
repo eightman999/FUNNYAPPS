@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +76,7 @@ fun NovelReaderApp() {
     var showNovelList by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf("") }
     var currentUrl by remember { mutableStateOf("") }
+    var currentNovel by remember { mutableStateOf<Novel?>(null) }
 
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
@@ -145,19 +147,50 @@ fun NovelReaderApp() {
                     currentUrl = novelUrl
                     showWebView = true
                     showNovelList = false
+
+                    // 選択された小説オブジェクトも保存
+                    currentNovel = novel
                 } else {
                     // 小説をオンラインで開く
                     currentTitle = novel.title
                     currentUrl = "https://ncode.syosetu.com/${novel.ncode}/"
                     showWebView = true
                     showNovelList = false
+
+                    // 選択された小説オブジェクトも保存
+                    currentNovel = novel
                 }
             },
             onBack = { showNovelList = false }
         )
     }
     // WebViewの表示
+    // WebViewの表示
     else if (showWebView) {
+        var currentNovel by remember { mutableStateOf<Novel?>(null) }
+
+        // URLからnovelを検索する関数
+        LaunchedEffect(key1 = currentUrl) {
+            // 小説を表示する場合は、novelオブジェクトを取得
+            if (currentUrl.contains("/novels/") && currentUrl.contains("/episode_")) {
+                // URLからncodeを抽出
+                val ncodeRegex = "/novels/([^/]+)/".toRegex()
+                val ncodeMatch = ncodeRegex.find(currentUrl)
+                val ncode = ncodeMatch?.groupValues?.get(1) ?: ""
+
+                if (ncode.isNotEmpty()) {
+                    // リポジトリから該当する小説情報を取得
+                    val application = context.applicationContext as NovelReaderApplication
+                    val repository = application.repository
+                    repository.getAllNovels().collect { allNovels ->
+                        currentNovel = allNovels.find { it.ncode == ncode }
+                        // 1回だけ収集したら終了
+                        return@collect
+                    }
+                }
+            }
+        }
+
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -176,7 +209,7 @@ fun NovelReaderApp() {
             }
         ) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
-                WebViewScreen(url = currentUrl)
+                WebViewScreen(url = currentUrl, novel = currentNovel)
             }
         }
     }
@@ -386,13 +419,37 @@ fun NovelReaderApp() {
 }
 
 @Composable
-fun WebViewScreen(url: String) {
+fun WebViewScreen(url: String, novel: Novel? = null) {
     val context = LocalContext.current
+    val application = context.applicationContext as NovelReaderApplication
+    val repository = application.repository
+    val scope = rememberCoroutineScope()
+
+    // URLからエピソード番号を抽出する関数
+    fun extractEpisodeNumber(url: String): Int {
+        // episode_XXX.html の形式を想定
+        val regex = "episode_(\\d+)\\.html".toRegex()
+        val matchResult = regex.find(url)
+        return matchResult?.groupValues?.get(1)?.toIntOrNull() ?: 1
+    }
 
     AndroidView(
         factory = { context ->
             WebView(context).apply {
-                webViewClient = WebViewClient()
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String) {
+                        super.onPageFinished(view, url)
+
+                        // novelがnullでなく、ncodeが正しい場合のみ更新
+                        if (novel != null && novel.ncode.isNotEmpty()) {
+                            // エピソード番号を抽出して保存
+                            val episodeNum = extractEpisodeNumber(url)
+                            scope.launch {
+                                repository.updateLastReadEpisode(novel.ncode, episodeNum)
+                            }
+                        }
+                    }
+                }
                 settings.javaScriptEnabled = true
                 loadUrl(url)
             }
@@ -400,7 +457,6 @@ fun WebViewScreen(url: String) {
         modifier = Modifier.fillMaxSize()
     )
 }
-
 @Composable
 fun SectionHeader(title: String) {
     Box(
@@ -454,7 +510,8 @@ fun NovelListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var hasValidPermission by remember { mutableStateOf(false) }
-
+    val application = context.applicationContext as NovelReaderApplication
+    val repository = application.repository
     // コンポジションのライフサイクルに紐づけてクリーンアップする
     DisposableEffect(key1 = Unit) {
         onDispose {
@@ -473,47 +530,53 @@ fun NovelListScreen(
             hasValidPermission = false
         }
     }
-
+    // 小説リポジトリの準備
+    val novelRepository = remember { NovelRepository(context) }
     // データ読み込みはボタンクリックなどのアクションで行う方が安全
     // 自動読み込みの場合は以下のようにする
-    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+    // Roomデータベースから小説情報を取得
+    LaunchedEffect(key1 = Unit) {
         try {
-            Log.d("NovelListScreen", "小説一覧読み込み開始")
-            isLoading = true
-            errorMessage = null
-
-            if (selfServerAccess && selfServerPath.isNotEmpty()) {
-                if (!hasValidPermission) {
-                    errorMessage = "ファイルへのアクセス権限がありません。設定画面で再度ファイルを選択してください。"
-                    isLoading = false
-                    return@LaunchedEffect
-                }
-
-                try {
-                    Log.d("NovelListScreen", "サーバーから小説リストを読み込みます: $selfServerPath")
-                    val result = parser.parseNovelListFromServerPath(selfServerPath)
-                    novels = result
-                    Log.d("NovelListScreen", "読み込み完了: ${result.size}件")
-                } catch (e: Exception) {
-                    Log.e("NovelListScreen", "小説一覧取得エラー", e)
-                    errorMessage = "小説一覧の取得に失敗しました: ${e.message}"
-                }
-            } else {
-                // テスト用のダミーデータ
-                Log.d("NovelListScreen", "ダミーデータを使用")
-                novels = listOf(
-                    Novel("Re:ゼロから始める異世界生活", "n9876543210"),
-                    Novel("転生したらスライムだった件", "n1234567890"),
-                    Novel("オーバーロード", "n0987654321")
-                )
+            // Flowからデータを収集
+            repository.getAllNovels().collect { novelList ->
+                novels = novelList
+                isLoading = false
             }
         } catch (e: Exception) {
-            Log.e("NovelListScreen", "予期せぬエラー", e)
-            errorMessage = "エラーが発生しました: ${e.message}"
-        } finally {
+            errorMessage = "データの読み込みに失敗しました: ${e.message}"
             isLoading = false
         }
     }
+
+    // 自己サーバーからの小説情報更新
+    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+        if (selfServerAccess && selfServerPath.isNotEmpty()) {
+            try {
+                // NovelParserから小説リストを取得
+                val parser = NovelParser(context)
+                val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
+
+                // 各小説のエピソード数を取得して保存
+                parsedNovels.forEach { novel ->
+                    val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
+
+                    // 新しい小説情報をデータベースに保存
+                    repository.saveNovel(
+                        Novel(
+                            title = novel.title,
+                            ncode = novel.ncode,
+                            totalEpisodes = episodeCount,
+                            // 既存の小説ならlastReadEpisodeを保持、新規なら1に設定
+                            lastReadEpisode = 1
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                errorMessage = "小説情報の更新に失敗しました: ${e.message}"
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -603,11 +666,15 @@ fun NovelItem(
     novel: Novel,
     onClick: () -> Unit
 ) {
+    // 未読数に基づいた透明度の設定
+    val alpha = if (novel.unreadCount == 0) 0.5f else 1.0f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable(onClick = onClick)
+            .alpha(alpha)
     ) {
         Column(
             modifier = Modifier
@@ -619,14 +686,27 @@ fun NovelItem(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "最後に読んだ: ${novel.lastReadEpisode}話",
-                style = MaterialTheme.typography.bodySmall
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "最後に読んだ: ${novel.lastReadEpisode}話",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "未読: ${novel.unreadCount}/${novel.totalEpisodes}話",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (novel.unreadCount > 0)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
-}
 
+}
 @Preview(showBackground = true)
 @Composable
 fun NovelReaderAppPreview() {
