@@ -1,6 +1,8 @@
 package com.shunlight_library.nr_reader
 
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -11,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -29,6 +32,9 @@ import androidx.core.view.WindowCompat
 import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
 import com.shunlight_library.nr_reader.ui.theme.NRreaderTheme
 import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,15 +63,54 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelReaderApp() {
-    val lightBlue = Color(0xFF80C8FF) // 指定された色に変更
+    val lightBlue = Color(0xFF80C8FF)
     var showWebView by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showNovelList by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf("") }
     var currentUrl by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val settingsStore = remember { SettingsStore(context) }
+    val scope = rememberCoroutineScope()
+
+    // 設定情報を取得
+    var selfServerPath by remember { mutableStateOf("") }
+    var selfServerAccess by remember { mutableStateOf(false) }
+
+    LaunchedEffect(key1 = true) {
+        selfServerPath = settingsStore.selfServerPath.first()
+        selfServerAccess = settingsStore.selfServerAccess.first()
+    }
 
     // 設定画面の表示
     if (showSettings) {
         SettingsScreen(onBack = { showSettings = false })
+    }
+    // 小説一覧の表示
+    else if (showNovelList) {
+        NovelListScreen(
+            selfServerPath = selfServerPath,
+            selfServerAccess = selfServerAccess,
+            onNovelSelected = { novel ->
+                if (selfServerAccess && selfServerPath.isNotEmpty()) {
+                    val uri = Uri.parse(selfServerPath)
+                    val baseDir = uri.path?.let { File(it).parentFile?.path } ?: ""
+                    val novelUrl = "file://$baseDir/novels/${novel.ncode}/index.html"
+                    currentTitle = novel.title
+                    currentUrl = novelUrl
+                    showWebView = true
+                    showNovelList = false
+                } else {
+                    // 小説をオンラインで開く
+                    currentTitle = novel.title
+                    currentUrl = "https://ncode.syosetu.com/${novel.ncode}/"
+                    showWebView = true
+                    showNovelList = false
+                }
+            },
+            onBack = { showNovelList = false }
+        )
     }
     // WebViewの表示
     else if (showWebView) {
@@ -244,7 +289,13 @@ fun NovelReaderApp() {
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    NavButton(title = "小説一覧", icon = "📚")
+                    NavButton(
+                        title = "小説一覧",
+                        icon = "📚",
+                        onClick = {
+                            showNovelList = true
+                        }
+                    )
                     NavButton(title = "最近更新された小説", icon = "▶")
                 }
                 Row(
@@ -341,6 +392,152 @@ fun NavButton(
             text = title,
             fontSize = 16.sp
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NovelListScreen(
+    selfServerPath: String,
+    selfServerAccess: Boolean,
+    onNovelSelected: (Novel) -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // 小説一覧を取得
+    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+        isLoading = true
+        errorMessage = null
+
+        if (selfServerAccess && selfServerPath.isNotEmpty()) {
+            try {
+                Log.d("NovelListScreen", "Loading novels from server path: $selfServerPath")
+                val parser = NovelParser(context)
+                val result = parser.parseNovelListFromServerPath(selfServerPath)
+                Log.d("NovelListScreen", "Loaded ${result.size} novels from server")
+                novels = result
+            } catch (e: Exception) {
+                Log.e("NovelListScreen", "Error loading novels", e)
+                errorMessage = "小説一覧の取得に失敗しました: ${e.message}"
+            }
+        } else {
+            // テスト用のダミーデータ
+            Log.d("NovelListScreen", "Using dummy novel data")
+            novels = listOf(
+                Novel("Re:ゼロから始める異世界生活", "n9876543210"),
+                Novel("転生したらスライムだった件", "n1234567890"),
+                Novel("オーバーロード", "n0987654321")
+            )
+        }
+
+        isLoading = false
+    }
+
+    // UI部分（変更なし）
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("小説一覧") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else if (errorMessage != null) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = errorMessage ?: "",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onBack) {
+                        Text("戻る")
+                    }
+                }
+            } else if (novels.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("小説が見つかりませんでした")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (selfServerAccess) {
+                        Text(
+                            text = "自己サーバーのパス: $selfServerPath",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            // デバッグ用に現在のパスを表示
+                            Log.d("NovelListScreen", "Current server path: $selfServerPath")
+                        }) {
+                            Text("パス情報を確認")
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(novels) { novel ->
+                        NovelItem(
+                            novel = novel,
+                            onClick = { onNovelSelected(novel) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+fun NovelItem(
+    novel: Novel,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = novel.title,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "最後に読んだ: ${novel.lastReadEpisode}話",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
 
