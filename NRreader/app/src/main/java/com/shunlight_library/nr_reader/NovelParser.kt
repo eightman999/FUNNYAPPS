@@ -17,6 +17,12 @@ class NovelParser(private val context: Context) {
     suspend fun parseNovelListFromServerPath(serverPath: String): List<Novel> {
         return withContext(Dispatchers.IO) {
             try {
+                // キャッシュをチェック
+                if (NovelParserCache.hasCachedNovels(serverPath)) {
+                    Log.d(TAG, "キャッシュから小説リストを返します")
+                    return@withContext NovelParserCache.getCachedNovels()
+                }
+
                 Log.d(TAG, "Parsing novel list from: $serverPath")
                 val novelList = mutableListOf<Novel>()
 
@@ -85,11 +91,19 @@ class NovelParser(private val context: Context) {
                     Log.d(TAG, "Total novels added: ${novelList.size}")
                 }
 
+                // キャッシュに結果を保存
+                NovelParserCache.cacheNovels(serverPath, novelList)
+
                 novelList
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing novel list", e)
                 emptyList()
             }
         }
+    }
+
+    // キャッシュをクリア
+    fun clearCache() {
+        NovelParserCache.clearCache()
     }
 }

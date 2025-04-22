@@ -73,14 +73,30 @@ fun NovelReaderApp() {
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
     val scope = rememberCoroutineScope()
+    val parser = remember { NovelParser(context) }
 
     // 設定情報を取得
     var selfServerPath by remember { mutableStateOf("") }
     var selfServerAccess by remember { mutableStateOf(false) }
 
+    // アプリ起動時に設定情報を読み込む
     LaunchedEffect(key1 = true) {
-        selfServerPath = settingsStore.selfServerPath.first()
-        selfServerAccess = settingsStore.selfServerAccess.first()
+        settingsStore.selfServerPath.collect { path ->
+            if (path != selfServerPath) {
+                selfServerPath = path
+                // パスが変更された場合はキャッシュをクリア
+                parser.clearCache()
+                Log.d("NovelReaderApp", "サーバーパスを更新: $path")
+            }
+        }
+    }
+
+    // selfServerAccessの設定も監視
+    LaunchedEffect(key1 = true) {
+        settingsStore.selfServerAccess.collect { enabled ->
+            selfServerAccess = enabled
+            Log.d("NovelReaderApp", "サーバーアクセス設定を更新: $enabled")
+        }
     }
 
     // 設定画面の表示
@@ -405,11 +421,12 @@ fun NovelListScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val parser = remember { NovelParser(context) }
     var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // 小説一覧を取得
+    // キャッシュチェックとデータ読み込み
     LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
         isLoading = true
         errorMessage = null
@@ -417,10 +434,17 @@ fun NovelListScreen(
         if (selfServerAccess && selfServerPath.isNotEmpty()) {
             try {
                 Log.d("NovelListScreen", "Loading novels from server path: $selfServerPath")
-                val parser = NovelParser(context)
-                val result = parser.parseNovelListFromServerPath(selfServerPath)
-                Log.d("NovelListScreen", "Loaded ${result.size} novels from server")
-                novels = result
+
+                // 既にキャッシュがあればそれを使用
+                if (NovelParserCache.hasCachedNovels(selfServerPath)) {
+                    Log.d("NovelListScreen", "キャッシュから小説リストを読み込みます")
+                    novels = NovelParserCache.getCachedNovels()
+                } else {
+                    Log.d("NovelListScreen", "サーバーから小説リストを読み込みます")
+                    val result = parser.parseNovelListFromServerPath(selfServerPath)
+                    Log.d("NovelListScreen", "Loaded ${result.size} novels from server")
+                    novels = result
+                }
             } catch (e: Exception) {
                 Log.e("NovelListScreen", "Error loading novels", e)
                 errorMessage = "小説一覧の取得に失敗しました: ${e.message}"
@@ -436,6 +460,7 @@ fun NovelListScreen(
         }
 
         isLoading = false
+
     }
 
     // UI部分（変更なし）
