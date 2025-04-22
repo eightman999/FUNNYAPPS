@@ -677,12 +677,21 @@ fun NovelListScreen(
     val scope = rememberCoroutineScope()
     val settingsStore = remember { SettingsStore(context) }
     val parser = remember { NovelParser(context) }
-    var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var hasValidPermission by remember { mutableStateOf(false) }
     val application = context.applicationContext as NovelReaderApplication
     val repository = application.repository
+
+    var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isInitialLoading by remember { mutableStateOf(false) }
+    var isUpdating by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hasValidPermission by remember { mutableStateOf(false) }
+
+    // 進行状況を追跡する変数
+    var progress by remember { mutableStateOf(0f) }
+    var processedCount by remember { mutableStateOf(0) }
+    var totalCount by remember { mutableStateOf(0) }
+    var progressMessage by remember { mutableStateOf("小説データを読み込んでいます...") }
 
     // 権限のチェックとデータ読み込みを分離
     LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
@@ -710,64 +719,156 @@ fun NovelListScreen(
             // ここまで来たら、自己サーバーモードは有効で権限もある
             Log.d("NovelListScreen", "自己サーバーモードは有効で権限もあります。小説データを読み込みます。")
 
-            // 小説データの読み込み
-            try {
-                // NovelParserから小説リストを取得
-                val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
-                Log.d("NovelListScreen", "取得した小説数: ${parsedNovels.size}")
+            // DBに小説が存在するか確認
+            val hasNovels = repository.hasAnyNovels()
+            if (hasNovels) {
+                // DBから小説を読み込み
+                Log.d("NovelListScreen", "DBから小説データを読み込みます")
+                progressMessage = "保存済みの小説データを読み込んでいます..."
+                repository.getAllNovels().collect { allNovels ->
+                    novels = allNovels
+                    isLoading = false
 
-                if (parsedNovels.isNotEmpty()) {
-                    // 各小説のエピソード数を取得して保存
-                    val updatedNovels = mutableListOf<Novel>()
+                    // バックグラウンドで更新チェック
+                    if (repository.needsUpdate()) {
+                        isUpdating = true
+                        Log.d("NovelListScreen", "バックグラウンドで更新チェックを開始")
+                        progressMessage = "小説の更新をチェックしています..."
 
-                    parsedNovels.forEach { novel ->
-                        // 既存の小説データを確認
-                        val existingNovel = repository.getNovelByNcode(novel.ncode)
-                        val lastReadEpisode = existingNovel?.lastReadEpisode ?: 1
+                        // バックグラウンドでアップデートを実行
+                        scope.launch {
+                            try {
+                                progress = 0f
+                                val updatedNovels = repository.getUpdatedNovels(selfServerPath)
 
-                        // エピソード数を取得
-                        val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
-                        Log.d("NovelListScreen", "小説 '${novel.title}' のエピソード数: $episodeCount")
+                                // 更新中の進行状況を監視
+                                while (isUpdating) {
+                                    progress = repository.progress
+                                    processedCount = repository.processedCount
+                                    totalCount = repository.totalCount
 
-                        // 新しい小説情報を作成
-                        val updatedNovel = Novel(
-                            title = novel.title,
-                            ncode = novel.ncode,
-                            totalEpisodes = episodeCount,
-                            lastReadEpisode = lastReadEpisode,
-                            unreadCount = (episodeCount - lastReadEpisode).coerceAtLeast(0)
-                        )
+                                    // 完了したら終了
+                                    if (progress >= 1f) {
+                                        isUpdating = false
+                                    }
 
-                        // リストに追加
-                        updatedNovels.add(updatedNovel)
+                                    //delay(100) // 少し待機
+                                }
 
-                        // データベースに保存
-                        repository.saveNovel(updatedNovel)
+                                // タイムスタンプを更新
+                                repository.saveLastUpdateTimestamp(System.currentTimeMillis())
+
+                                // 更新がある場合のみトースト表示
+                                if (updatedNovels.isNotEmpty()) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            context,
+                                            "${updatedNovels.size}作品に更新がありました",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("NovelListScreen", "更新チェック中にエラー: ${e.message}", e)
+                                isUpdating = false
+                            }
+                        }
                     }
-
-                    // 画面に表示するリストを更新
-                    novels = updatedNovels
-
-                    Log.d("NovelListScreen", "すべての小説情報の更新が完了しました")
-                } else {
-                    Log.d("NovelListScreen", "取得した小説がありません")
-                    errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
                 }
-            } catch (e: Exception) {
-                Log.e("NovelListScreen", "小説情報の更新に失敗しました: ${e.message}", e)
-                errorMessage = "小説情報の更新に失敗しました: ${e.message}"
+            } else {
+                // 初回読み込み：ファイルシステムからスキャンしてDBに保存
+                Log.d("NovelListScreen", "初回読み込み: ファイルシステムから小説データをスキャン")
+                isInitialLoading = true
+                progressMessage = "小説データを初めて読み込んでいます..."
+
+                // 小説解析の進行状況を監視
+                scope.launch {
+                    while (isInitialLoading) {
+                        progress = parser.progress
+                        processedCount = parser.processedCount
+                        totalCount = parser.totalCount
+                        //delay(100) // 少し待機
+                    }
+                }
+
+                try {
+                    // NovelParserから小説リストを取得
+                    val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
+                    Log.d("NovelListScreen", "取得した小説数: ${parsedNovels.size}")
+
+                    if (parsedNovels.isNotEmpty()) {
+                        // スキャンが終わったら、DBへの保存処理に進む
+                        progressMessage = "小説データをデータベースに保存しています..."
+                        progress = 0f // プログレスバーをリセット
+                        processedCount = 0
+                        totalCount = parsedNovels.size
+
+                        // 一括でDBに保存（書き込み中の進捗表示）
+                        withContext(Dispatchers.Default) {
+                            val novelCount = parsedNovels.size
+                            val batchSize = 50 // バッチサイズを調整
+                            val batches = parsedNovels.chunked(batchSize)
+
+                            batches.forEachIndexed { index, batch ->
+                                // 各小説のエピソード数を確認
+                                val updatedBatch = batch.map { novel ->
+                                    val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
+                                    novel.copy(totalEpisodes = episodeCount)
+                                }
+
+                                // バッチ単位でDBに保存
+                                repository.saveNovelsInBatch(updatedBatch)
+
+                                // 進行状況を更新
+                                processedCount = (index + 1) * batchSize
+                                if (processedCount > novelCount) processedCount = novelCount
+                                progress = processedCount.toFloat() / novelCount
+
+                                // 少し待機して進行状況を表示
+                                //delay(10)
+                            }
+                        }
+
+                        // タイムスタンプを更新
+                        repository.saveLastUpdateTimestamp(System.currentTimeMillis())
+
+                        // すべて完了したらFlowから小説データを読み込む
+                        progressMessage = "完了しました！"
+                        progress = 1f
+
+                        // 若干遅延を入れてユーザーに完了を認識させる
+                        //delay(500)
+
+                        // 読み込んだデータを表示
+                        repository.getAllNovels().collect { allNovels ->
+                            novels = allNovels
+                            isLoading = false
+                            isInitialLoading = false
+                            break // 1回だけ収集
+                        }
+                    } else {
+                        Log.d("NovelListScreen", "取得した小説がありません")
+                        errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
+                        isLoading = false
+                        isInitialLoading = false
+                    }
+                } catch (e: Exception) {
+                    Log.e("NovelListScreen", "小説情報の更新に失敗しました: ${e.message}", e)
+                    errorMessage = "小説情報の更新に失敗しました: ${e.message}"
+                    isLoading = false
+                    isInitialLoading = false
+                }
             }
-
-            isLoading = false
-
         } catch (e: Exception) {
             Log.e("NovelListScreen", "LaunchedEffect内のエラー: ${e.message}", e)
             errorMessage = "エラーが発生しました: ${e.message}"
             isLoading = false
+            isInitialLoading = false
+            isUpdating = false
         }
     }
 
-    // UIの構築（変更なし）
+    // UIの構築
     Scaffold(
         topBar = {
             TopAppBar(
@@ -785,9 +886,13 @@ fun NovelListScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+            if (isLoading || isInitialLoading) {
+                // 詳細なローディング表示
+                LoadingDialog(
+                    message = progressMessage,
+                    progress = progress,
+                    processedCount = processedCount,
+                    totalCount = totalCount
                 )
             } else if (errorMessage != null) {
                 Column(
@@ -840,11 +945,29 @@ fun NovelListScreen(
                     }
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(novels) { novel ->
-                        NovelItem(
-                            novel = novel,
-                            onClick = { onNovelSelected(novel) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // 小説リスト
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(novels) { novel ->
+                            NovelItem(
+                                novel = novel,
+                                onClick = { onNovelSelected(novel) }
+                            )
+                        }
+                    }
+
+                    // バックグラウンド更新の進行状況表示
+                    if (isUpdating) {
+                        DetailedProgressBar(
+                            progress = progress,
+                            message = progressMessage,
+                            processedCount = processedCount,
+                            totalCount = totalCount,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 16.dp)
                         )
                     }
                 }

@@ -1,3 +1,4 @@
+// NovelParser.kt の修正部分
 package com.shunlight_library.nr_reader
 
 import android.content.Context
@@ -9,10 +10,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import java.io.*
+import java.util.concurrent.atomic.AtomicInteger
 
 class NovelParser(private val context: Context) {
 
     private val TAG = "NovelParser"
+
+    // 進行状況を追跡するための変数
+    private val _processedCount = AtomicInteger(0)
+    private var _totalCount = 0
+
+    // 進行状況を取得するプロパティ
+    val processedCount: Int get() = _processedCount.get()
+    val totalCount: Int get() = _totalCount
+    val progress: Float get() = if (_totalCount > 0) processedCount.toFloat() / _totalCount else 0f
+
+    // 進行状況をリセット
+    fun resetProgress() {
+        _processedCount.set(0)
+        _totalCount = 0
+    }
 
     suspend fun parseNovelListFromServerPath(serverPath: String): List<Novel> {
         return withContext(Dispatchers.IO) {
@@ -41,6 +58,10 @@ class NovelParser(private val context: Context) {
                         if (novelsDir.exists() && novelsDir.isDirectory) {
                             Log.d(TAG, "novelsディレクトリを検出: ${novelsDir.absolutePath}")
                             val novelDirs = novelsDir.listFiles { file -> file.isDirectory }
+
+                            // 総数を設定
+                            _totalCount = novelDirs?.size ?: 0
+                            _processedCount.set(0)
 
                             novelDirs?.forEach { dir ->
                                 try {
@@ -76,8 +97,13 @@ class NovelParser(private val context: Context) {
                                     } else {
                                         Log.d(TAG, "index.htmlが見つかりません: ${indexFile.absolutePath}")
                                     }
+
+                                    // 進行状況を更新
+                                    _processedCount.incrementAndGet()
                                 } catch (e: Exception) {
                                     Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
+                                    // エラーがあっても進行状況は更新
+                                    _processedCount.incrementAndGet()
                                 }
                             }
                         } else {
@@ -99,6 +125,10 @@ class NovelParser(private val context: Context) {
                         if (novelsDir != null && novelsDir.exists()) {
                             Log.d(TAG, "novelsディレクトリを検出")
                             val novelDirs = novelsDir.listFiles()
+
+                            // 総数を設定
+                            _totalCount = novelDirs.size
+                            _processedCount.set(0)
 
                             novelDirs.forEach { dir ->
                                 if (dir.isDirectory) {
@@ -137,8 +167,13 @@ class NovelParser(private val context: Context) {
                                         } else {
                                             Log.d(TAG, "index.htmlが見つかりません: $ncode")
                                         }
+
+                                        // 進行状況を更新
+                                        _processedCount.incrementAndGet()
                                     } catch (e: Exception) {
                                         Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
+                                        // エラーがあっても進行状況は更新
+                                        _processedCount.incrementAndGet()
                                     }
                                 }
                             }
