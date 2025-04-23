@@ -159,8 +159,11 @@ class ExternalDatabaseRepository(
             saveLastReadNovelInfo(externalDao)
 
             // 6. 完了
-            _progressMessage.value = "データベース同期が完了しました！ $novelCount件の小説を同期しました。"
-            Log.d(TAG, "データベース同期完了: $novelCount件の小説を同期")
+            // 修正: 文字列内での変数参照を書式文字列に変更
+// 162行目
+            _progressMessage.value = "データベース同期が完了しました！ ${novelCount}件の小説を同期しました。"
+// 163行目
+            Log.d(TAG, "データベース同期完了: ${novelCount}件の小説を同期")
             return true
 
         } catch (e: Exception) {

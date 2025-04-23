@@ -25,10 +25,13 @@ import com.shunlight_library.nr_reader.repository.ExternalDatabaseRepository
 import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
 import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 
 /**
  * データベース設定画面コンポーネント
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatabaseSettingsScreen(
     onBack: () -> Unit
@@ -112,7 +115,7 @@ fun DatabaseSettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
+                            imageVector = Icons.Default.ArrowBack,
                             contentDescription = "戻る"
                         )
                     }
