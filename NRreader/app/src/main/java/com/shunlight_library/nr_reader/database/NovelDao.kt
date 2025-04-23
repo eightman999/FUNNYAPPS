@@ -1,4 +1,3 @@
-// NovelDao.kt の修正部分
 package com.shunlight_library.nr_reader.database
 
 import androidx.room.*
@@ -9,11 +8,9 @@ interface NovelDao {
     @Query("SELECT * FROM novels ORDER BY lastUpdated DESC")
     fun getAllNovels(): Flow<List<NovelEntity>>
 
-    // 新規追加: 非Flow版のgetAllNovels
     @Query("SELECT * FROM novels ORDER BY lastUpdated DESC")
     suspend fun getAllNovelsSync(): List<NovelEntity>
 
-    // 新規追加: 小説数を取得
     @Query("SELECT COUNT(*) FROM novels")
     suspend fun getNovelCount(): Int
 
@@ -23,7 +20,6 @@ interface NovelDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(novel: NovelEntity)
 
-    // 新規追加: 一括挿入メソッド
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(novels: List<NovelEntity>)
 
@@ -41,4 +37,20 @@ interface NovelDao {
 
     @Query("DELETE FROM novels")
     suspend fun deleteAll()
+
+    // 新規追加：最近読んだ小説のリスト取得（Flow版）
+    @Query("SELECT * FROM novels ORDER BY lastUpdated DESC LIMIT :limit")
+    fun getRecentNovels(limit: Int = 20): Flow<List<NovelEntity>>
+
+    // 新規追加：最近読んだ小説のリスト取得（非Flow版）
+    @Query("SELECT * FROM novels ORDER BY lastUpdated DESC LIMIT :limit")
+    suspend fun getRecentNovelsSync(limit: Int = 20): List<NovelEntity>
+
+    // 新規追加：総エピソード数と最後に読んだエピソードの差が1以上の小説（未読あり）
+    @Query("SELECT * FROM novels WHERE (totalEpisodes - lastReadEpisode) > 0 ORDER BY lastUpdated DESC")
+    suspend fun getNovelsWithUnread(): List<NovelEntity>
+
+    // 新規追加：検索機能
+    @Query("SELECT * FROM novels WHERE title LIKE '%' || :keyword || '%'")
+    suspend fun searchNovelsByTitle(keyword: String): List<NovelEntity>
 }

@@ -1,4 +1,4 @@
-// AppDatabase.kt
+// AppDatabase.kt (Updated)
 package com.shunlight_library.nr_reader.database
 
 import android.content.Context
@@ -6,9 +6,17 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [NovelEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        NovelEntity::class,
+        NovelExtendedEntity::class  // 拡張情報エンティティを追加
+    ],
+    version = 2,  // バージョンを上げる
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun novelDao(): NovelDao
+    abstract fun novelExtendedDao(): NovelExtendedDao  // 新しいDAOを追加
 
     companion object {
         @Volatile
@@ -21,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "novel_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration()  // マイグレーション失敗時のフォールバック
                     .build()
                 INSTANCE = instance
                 instance

@@ -12,16 +12,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
-// Create a DataStore instance at the top level
+// DataStoreのインスタンスをトップレベルで定義
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /**
- * A class that handles saving and retrieving user preferences
+ * ユーザー設定の保存と取得を扱うクラス
  */
 class SettingsStore(private val context: Context) {
 
-    // Define preference keys
+    // 設定キーの定義
     companion object {
+        // 既存の設定キー
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val FONT_FAMILY = stringPreferencesKey("font_family")
         val FONT_SIZE = intPreferencesKey("font_size")
@@ -29,9 +30,15 @@ class SettingsStore(private val context: Context) {
         val SELF_SERVER_ACCESS = booleanPreferencesKey("self_server_access")
         val TEXT_ORIENTATION = stringPreferencesKey("text_orientation")
         val SELF_SERVER_PATH_KEY = stringPreferencesKey("self_server_path")
+
+        // データベース関連の設定キー
+        val DB_ENABLED = booleanPreferencesKey("db_enabled")
+        val DB_URI = stringPreferencesKey("db_uri")
+        val DB_COPY_TO_INTERNAL = booleanPreferencesKey("db_copy_to_internal")
+        val DB_LAST_SYNC = longPreferencesKey("db_last_sync")
     }
 
-    // Default values
+    // デフォルト値の定義
     val defaultThemeMode = "System"
     val defaultFontFamily = "Gothic"
     val defaultFontSize = 16
@@ -40,7 +47,13 @@ class SettingsStore(private val context: Context) {
     val defaultTextOrientation = "Horizontal"
     val defaultSelfServerPath = ""
 
-    // Get the theme mode preference as a Flow
+    // データベース関連のデフォルト値
+    val defaultDbEnabled = false
+    val defaultDbUri = ""
+    val defaultDbCopyToInternal = false
+    val defaultDbLastSync = 0L
+
+    // テーマモード設定をFlowとして取得
     val themeMode: Flow<String> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -53,7 +66,7 @@ class SettingsStore(private val context: Context) {
             preferences[THEME_MODE] ?: defaultThemeMode
         }
 
-    // Get the font family preference as a Flow
+    // フォントファミリー設定をFlowとして取得
     val fontFamily: Flow<String> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -66,7 +79,7 @@ class SettingsStore(private val context: Context) {
             preferences[FONT_FAMILY] ?: defaultFontFamily
         }
 
-    // Get the font size preference as a Flow
+    // フォントサイズ設定をFlowとして取得
     val fontSize: Flow<Int> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -79,7 +92,7 @@ class SettingsStore(private val context: Context) {
             preferences[FONT_SIZE] ?: defaultFontSize
         }
 
-    // Get the background color preference as a Flow
+    // 背景色設定をFlowとして取得
     val backgroundColor: Flow<String> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -92,7 +105,7 @@ class SettingsStore(private val context: Context) {
             preferences[BACKGROUND_COLOR] ?: defaultBackgroundColor
         }
 
-    // Get the self server access preference as a Flow
+    // 自己サーバーアクセス設定をFlowとして取得
     val selfServerAccess: Flow<Boolean> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -105,7 +118,7 @@ class SettingsStore(private val context: Context) {
             preferences[SELF_SERVER_ACCESS] ?: defaultSelfServerAccess
         }
 
-    // Get the text orientation preference as a Flow
+    // テキスト表示方向設定をFlowとして取得
     val textOrientation: Flow<String> = context.dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -118,75 +131,151 @@ class SettingsStore(private val context: Context) {
             preferences[TEXT_ORIENTATION] ?: defaultTextOrientation
         }
 
-    // Save the theme mode preference
+    // データベース有効設定をFlowとして取得
+    val dbEnabled: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[DB_ENABLED] ?: defaultDbEnabled
+        }
+
+    // データベースURIをFlowとして取得
+    val dbUri: Flow<String> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[DB_URI] ?: defaultDbUri
+        }
+
+    // 本体コピー設定をFlowとして取得
+    val dbCopyToInternal: Flow<Boolean> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[DB_COPY_TO_INTERNAL] ?: defaultDbCopyToInternal
+        }
+
+    // 最終同期日時をFlowとして取得
+    val dbLastSync: Flow<Long> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[DB_LAST_SYNC] ?: defaultDbLastSync
+        }
+
+    // テーマモード設定の保存
     suspend fun saveThemeMode(mode: String) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = mode
         }
     }
 
-    // Save the font family preference
+    // フォントファミリー設定の保存
     suspend fun saveFontFamily(family: String) {
         context.dataStore.edit { preferences ->
             preferences[FONT_FAMILY] = family
         }
     }
 
-    // Save the font size preference
+    // フォントサイズ設定の保存
     suspend fun saveFontSize(size: Int) {
         context.dataStore.edit { preferences ->
             preferences[FONT_SIZE] = size
         }
     }
 
-    // Save the background color preference
+    // 背景色設定の保存
     suspend fun saveBackgroundColor(color: String) {
         context.dataStore.edit { preferences ->
             preferences[BACKGROUND_COLOR] = color
         }
     }
 
-    // Save the self server access preference
+    // 自己サーバーアクセス設定の保存
     suspend fun saveSelfServerAccess(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SELF_SERVER_ACCESS] = enabled
         }
     }
 
-    // Save the text orientation preference
+    // テキスト表示方向設定の保存
     suspend fun saveTextOrientation(orientation: String) {
         context.dataStore.edit { preferences ->
             preferences[TEXT_ORIENTATION] = orientation
         }
     }
 
+    // 自己サーバーパス設定を取得
     val selfServerPath = context.dataStore.data.map { preferences ->
         preferences[SELF_SERVER_PATH_KEY] ?: ""
     }
 
+    // 自己サーバーパス設定の保存
     suspend fun saveSelfServerPath(path: String) {
         context.dataStore.edit { preferences ->
             preferences[SELF_SERVER_PATH_KEY] = path
         }
     }
-    // SettingsStore.kt に追加
+
+    // データベース設定の保存
+    suspend fun saveDatabaseSettings(dbUri: String, copyToInternal: Boolean, isEnabled: Boolean) {
+        try {
+            context.dataStore.edit { preferences ->
+                preferences[DB_URI] = dbUri
+                preferences[DB_COPY_TO_INTERNAL] = copyToInternal
+                preferences[DB_ENABLED] = isEnabled
+                preferences[DB_LAST_SYNC] = System.currentTimeMillis()
+            }
+            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, コピー=$copyToInternal, 有効=$isEnabled")
+        } catch (e: Exception) {
+            Log.e("SettingsStore", "データベース設定の保存エラー: ${e.message}", e)
+            throw e
+        }
+    }
+
+    // 最終同期時刻の更新
+    suspend fun updateDatabaseLastSync() {
+        context.dataStore.edit { preferences ->
+            preferences[DB_LAST_SYNC] = System.currentTimeMillis()
+        }
+    }
+
     // 永続的なアクセス権限を持つURIを取得
     fun getPersistedUriPermissions(): List<Uri> {
         return context.contentResolver.persistedUriPermissions.map { it.uri }
     }
-    // 自己サーバーアクセス設定の確認メソッドを追加
+
+    // 自己サーバーアクセス設定の確認
     suspend fun isSelfServerAccessEnabled(): Boolean {
         return selfServerAccess.first()
     }
 
-    // 自己サーバーパスの確認メソッドを追加
+    // 自己サーバーパスの確認
     suspend fun getSelfServerPath(): String {
         return selfServerPath.first()
     }
 
-
-
-    // 指定されたURIが永続的なアクセス権限を持っているか確認（読み書き両方）
+    // 指定されたURIが永続的なアクセス権限を持っているか確認
     fun hasPersistedPermission(uriString: String): Boolean {
         if (uriString.isEmpty()) return false
 
@@ -212,6 +301,36 @@ class SettingsStore(private val context: Context) {
             Log.e("SettingsStore", "権限確認エラー: ${e.message}", e)
             return false
         }
+    }
+
+    // データベースURIが有効かチェック
+    fun hasValidDatabaseUri(uriString: String): Boolean {
+        if (uriString.isEmpty()) return false
+
+        try {
+            // URIの形式をチェック
+            val uri = Uri.parse(uriString)
+
+            // 権限チェック
+            val hasPermission = context.contentResolver.persistedUriPermissions.any {
+                it.uri == uri && it.isReadPermission
+            }
+
+            Log.d("SettingsStore", "DB URI権限チェック結果: $hasPermission")
+            return hasPermission
+
+        } catch (e: Exception) {
+            Log.e("SettingsStore", "DB URI権限確認エラー: ${e.message}", e)
+            return false
+        }
+    }
+
+    // データベース機能が有効で、URIが設定されているかを確認
+    suspend fun isDatabaseEnabled(): Boolean {
+        val enabled = dbEnabled.first()
+        val uri = dbUri.first()
+
+        return enabled && uri.isNotEmpty() && hasValidDatabaseUri(uri)
     }
 
     // 永続的な権限を持つURIが有効期限切れでないか確認
@@ -246,9 +365,7 @@ class SettingsStore(private val context: Context) {
         }
     }
 
-    // Helper function to save all settings at once
-
-    // 設定を一括で保存するメソッドを改善
+    // 設定を一括で保存するメソッド
     suspend fun saveAllSettings(
         themeMode: String,
         fontFamily: String,

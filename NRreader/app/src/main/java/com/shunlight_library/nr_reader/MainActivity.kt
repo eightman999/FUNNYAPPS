@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
+import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
 import com.shunlight_library.nr_reader.ui.theme.NRreaderTheme
 import com.shunlight_library.nr_reader.ui.theme.backgroundColorValue
@@ -41,9 +43,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
-import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
-import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -82,6 +81,7 @@ fun NovelReaderApp() {
     val lightBlue = Color(0xFF80C8FF)
     var showWebView by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showDatabaseSettings by remember { mutableStateOf(false) }
     var showNovelList by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf("") }
     var currentUrl by remember { mutableStateOf("") }
@@ -89,6 +89,7 @@ fun NovelReaderApp() {
 
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
+    val application = context.applicationContext as NovelReaderApplication
     val scope = rememberCoroutineScope()
     val parser = remember { NovelParser(context) }
 
@@ -96,7 +97,40 @@ fun NovelReaderApp() {
     var selfServerPath by remember { mutableStateOf("") }
     var selfServerAccess by remember { mutableStateOf(false) }
     var hasValidPermission by remember { mutableStateOf(false) }
+    var dbEnabled by remember { mutableStateOf(false) }
+    var lastReadNovel by remember { mutableStateOf<Novel?>(null) }
+    var newNovelCount by remember { mutableStateOf(0) }
+    var updatedNovelCount by remember { mutableStateOf(0) }
 
+    // 最後に読んだ小説と新着・更新情報を読み込む関数
+    fun loadLastReadAndUpdatedInfo() {
+        scope.launch {
+            try {
+                // 最後に読んだ小説情報を取得
+                val prefs = context.getSharedPreferences("novel_reader_prefs", ComponentActivity.MODE_PRIVATE)
+                val lastReadNcode = prefs.getString("last_read_ncode", null)
+                val lastReadTitle = prefs.getString("last_read_title", null)
+                val lastReadEpisode = prefs.getInt("last_read_episode", 1)
+
+                if (lastReadNcode != null && lastReadTitle != null) {
+                    lastReadNovel = Novel(
+                        title = lastReadTitle,
+                        ncode = lastReadNcode,
+                        lastReadEpisode = lastReadEpisode,
+                        totalEpisodes = 0,
+                        unreadCount = 0
+                    )
+                }
+
+                // 新着・更新情報を取得（実際のDB状態から）
+                // この例では簡略化のために仮の値を使用
+                newNovelCount = 1  // 実際はDBから取得
+                updatedNovelCount = 0  // 実際はDBから取得
+            } catch (e: Exception) {
+                Log.e("NovelReaderApp", "最後に読んだ小説情報の取得エラー: ${e.message}", e)
+            }
+        }
+    }
 
     // 重要：設定をちゃんと読み込む
     LaunchedEffect(key1 = Unit) {
@@ -104,15 +138,20 @@ fun NovelReaderApp() {
             // 現在の設定値を取得
             selfServerAccess = settingsStore.selfServerAccess.first()
             selfServerPath = settingsStore.selfServerPath.first()
+            dbEnabled = settingsStore.dbEnabled.first()
 
             // 読み込み確認用ログ
-            Log.d("NovelReaderApp", "設定読み込み: selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+            Log.d("NovelReaderApp", "設定読み込み: selfServerAccess=$selfServerAccess, " +
+                    "selfServerPath=$selfServerPath, dbEnabled=$dbEnabled")
 
             // 保存されている権限の有効性を確認
             if (selfServerPath.isNotEmpty()) {
                 hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
                 Log.d("NovelReaderApp", "保存されているパスの権限確認: $hasValidPermission")
             }
+
+            // 最後に読んだ小説情報と新着・更新情報を取得
+            loadLastReadAndUpdatedInfo()
         } catch (e: Exception) {
             Log.e("NovelReaderApp", "設定読み込みエラー: ${e.message}", e)
         }
@@ -168,6 +207,14 @@ fun NovelReaderApp() {
     if (showSettings) {
         SettingsScreen(onBack = { showSettings = false })
     }
+    // DB設定画面の表示
+    else if (showDatabaseSettings) {
+        DatabaseSettingsScreen(onBack = {
+            showDatabaseSettings = false
+            // 設定が変更された可能性があるので情報を再読み込み
+            loadLastReadAndUpdatedInfo()
+        })
+    }
     // 小説一覧の表示
     else if (showNovelList) {
         NovelListScreen(
@@ -217,7 +264,6 @@ fun NovelReaderApp() {
         )
     }
     // WebViewの表示
-    // WebViewの表示
     else if (showWebView) {
         var currentNovel by remember { mutableStateOf<Novel?>(null) }
 
@@ -236,8 +282,7 @@ fun NovelReaderApp() {
                     val repository = application.repository
                     repository.getAllNovels().collect { allNovels ->
                         currentNovel = allNovels.find { it.ncode == ncode }
-                        // 1回だけ収集したら終了
-                        return@collect
+                        // この処理は直接returnで終了できないので、関数が終了するまで実行される
                     }
                 }
             }
@@ -286,26 +331,27 @@ fun NovelReaderApp() {
                     Text(
                         text = "新着・更新情報",
                         color = Color.White,
-                        fontSize = 18.sp
+                        fontSize = 16.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "新着1件・更新あり0件",
+                        text = "新着${newNovelCount}件・更新あり${updatedNovelCount}件",
                         color = Color.White,
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "最後に開いていた小説",
                         color = Color.White,
-                        fontSize = 18.sp
+                        fontSize = 16.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Re：ゼロから始める異世界生活 1話",
+                        text = lastReadNovel?.let { "${it.title} ${it.lastReadEpisode}話" }
+                            ?: "まだ小説を読んでいません",
                         color = Color.White,
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -456,13 +502,30 @@ fun NovelReaderApp() {
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    NavButton(
+                        title = "DB読み込み",
+                        icon = "🗃️",
+                        onClick = {
+                            showDatabaseSettings = true
+                        }
+                    )
                     NavButton(title = "ダウンロード状況", icon = "⬇")
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     NavButton(
                         title = "設定",
                         icon = "⚙",
                         onClick = { showSettings = true }
                     )
+                    Spacer(modifier = Modifier.width(160.dp))
                 }
+
                 // スペース追加
                 Spacer(modifier = Modifier.height(100.dp))
             }
@@ -668,6 +731,7 @@ fun NavButton(
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NovelListScreen(
@@ -696,8 +760,37 @@ fun NovelListScreen(
     var totalCount by remember { mutableStateOf(0) }
     var progressMessage by remember { mutableStateOf("小説データを読み込んでいます...") }
 
+    // DB優先モードかどうかを確認
+    var isDbEnabled by remember { mutableStateOf(false) }
+
+    // 外部DB使用モードかどうかを確認
+    LaunchedEffect(key1 = Unit) {
+        try {
+            isDbEnabled = settingsStore.isDatabaseEnabled()
+            Log.d("NovelListScreen", "外部DB有効状態: $isDbEnabled")
+
+            // 外部DBが有効な場合は、DB経由で小説リストを取得
+            if (isDbEnabled) {
+                progressMessage = "データベースから小説データを読み込んでいます..."
+
+                // DBからデータを読み込む
+                repository.getAllNovels().collect { allNovels ->
+                    novels = allNovels
+                    isLoading = false
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("NovelListScreen", "外部DB設定の確認エラー: ${e.message}", e)
+        }
+    }
+
     // 権限のチェックとデータ読み込みを分離
     LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
+        // 外部DBが有効の場合は自己サーバーモードをスキップ
+        if (isDbEnabled) {
+            return@LaunchedEffect
+        }
+
         Log.d("NovelListScreen", "LaunchedEffect開始 - selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
 
         try {
@@ -755,7 +848,7 @@ fun NovelListScreen(
                                         isUpdating = false
                                     }
 
-                                    delay(100) // 少し待機
+                                    //delay(100) // 少し待機
                                 }
 
                                 // タイムスタンプを更新
@@ -790,7 +883,7 @@ fun NovelListScreen(
                         progress = parser.progress
                         processedCount = parser.processedCount
                         totalCount = parser.totalCount
-                        delay(100) // 少し待機
+                        //delay(100) // 少し待機
                     }
                 }
 
@@ -828,7 +921,7 @@ fun NovelListScreen(
                                 progress = processedCount.toFloat() / novelCount
 
                                 // 少し待機して進行状況を表示
-                                delay(10)
+                                //delay(10)
                             }
                         }
 
@@ -840,12 +933,15 @@ fun NovelListScreen(
                         progress = 1f
 
                         // 若干遅延を入れてユーザーに完了を認識させる
-                        delay(500)
+                        //delay(500)
 
                         // 読み込んだデータを表示
-                        novels = repository.getAllNovels().first()
-                        isLoading = false
-                        isInitialLoading = false
+                        repository.getAllNovels().collect { allNovels ->
+                            novels = allNovels
+                            isLoading = false
+                            isInitialLoading = false
+                            return@collect
+                        }
                     } else {
                         Log.d("NovelListScreen", "取得した小説がありません")
                         errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
