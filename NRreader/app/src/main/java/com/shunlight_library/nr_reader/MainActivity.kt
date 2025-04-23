@@ -41,6 +41,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
+import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -752,7 +755,7 @@ fun NovelListScreen(
                                         isUpdating = false
                                     }
 
-                                    //delay(100) // 少し待機
+                                    delay(100) // 少し待機
                                 }
 
                                 // タイムスタンプを更新
@@ -787,7 +790,7 @@ fun NovelListScreen(
                         progress = parser.progress
                         processedCount = parser.processedCount
                         totalCount = parser.totalCount
-                        //delay(100) // 少し待機
+                        delay(100) // 少し待機
                     }
                 }
 
@@ -825,7 +828,7 @@ fun NovelListScreen(
                                 progress = processedCount.toFloat() / novelCount
 
                                 // 少し待機して進行状況を表示
-                                //delay(10)
+                                delay(10)
                             }
                         }
 
@@ -837,15 +840,12 @@ fun NovelListScreen(
                         progress = 1f
 
                         // 若干遅延を入れてユーザーに完了を認識させる
-                        //delay(500)
+                        delay(500)
 
                         // 読み込んだデータを表示
-                        repository.getAllNovels().collect { allNovels ->
-                            novels = allNovels
-                            isLoading = false
-                            isInitialLoading = false
-                            break // 1回だけ収集
-                        }
+                        novels = repository.getAllNovels().first()
+                        isLoading = false
+                        isInitialLoading = false
                     } else {
                         Log.d("NovelListScreen", "取得した小説がありません")
                         errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
