@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import com.shunlight_library.nr_reader.Novel
 import com.shunlight_library.nr_reader.database.*
+import com.shunlight_library.nr_reader.database.ExternalDatabaseHandler.Companion.INTERNAL_DB_NAME
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
@@ -55,6 +56,21 @@ class ExternalDatabaseRepository(
                     _progressMessage.value = "データベースのコピーに失敗しました"
                     return false
                 }
+
+                // コピーしたファイルの存在確認
+                val dbFile = context.getDatabasePath(INTERNAL_DB_NAME)
+                if (!dbFile.exists()) {
+                    Log.e(TAG, "コピー後のデータベースファイルが見つかりません: ${dbFile.absolutePath}")
+                    _progressMessage.value = "データベースファイルの確認に失敗しました"
+                    return false
+                }
+
+                // ファイルサイズを確認
+                if (dbFile.length() == 0L) {
+                    Log.e(TAG, "コピーされたデータベースファイルが空です: ${dbFile.absolutePath}")
+                    _progressMessage.value = "コピーされたデータベースファイルが空です"
+                    return false
+                }
             } else {
                 // 直接外部DBを使用
                 dbHandler.setExternalDatabaseUri(externalDbUri)
@@ -66,6 +82,7 @@ class ExternalDatabaseRepository(
                 _progressMessage.value = "データベースへの接続に失敗しました"
                 return false
             }
+
 
             // 3. データの同期開始
             val externalDao = externalDb.externalNovelDao()
