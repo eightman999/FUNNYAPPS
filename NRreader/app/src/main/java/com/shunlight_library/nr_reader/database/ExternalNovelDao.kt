@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * 外部データベースにアクセスするためのDAO（データアクセスオブジェクト）
+ * n_codeカラムに対応するよう修正
  */
 @Dao
 interface ExternalNovelDao {
@@ -25,7 +26,7 @@ interface ExternalNovelDao {
     suspend fun getNovelCount(): Int
 
     // 特定の小説情報を取得
-    @Query("SELECT * FROM novels_descs WHERE ncode = :ncode")
+    @Query("SELECT * FROM novels_descs WHERE n_code = :ncode")
     suspend fun getNovelByNcode(ncode: String): ExternalNovelEntity?
 
     // 最終更新日でフィルタリングした小説一覧を取得
@@ -60,11 +61,11 @@ interface ExternalNovelDao {
     @Query("SELECT * FROM rast_read_novel ORDER BY date DESC LIMIT :limit")
     suspend fun getRecentlyReadNovels(limit: Int = 10): List<LastReadNovelEntity>
 
-    // タグで小説を検索
+    // タグで小説を検索 (n_codeカラムに修正)
     @Query("SELECT * FROM novels_descs WHERE main_tag LIKE '%' || :tag || '%' OR sub_tag LIKE '%' || :tag || '%'")
     suspend fun searchNovelsByTag(tag: String): List<ExternalNovelEntity>
 
-    // キーワードで小説を検索 (タイトル、作者、あらすじを対象)
+    // キーワードで小説を検索 (n_codeカラムに修正)
     @Query("SELECT * FROM novels_descs WHERE title LIKE '%' || :keyword || '%' OR author LIKE '%' || :keyword || '%' OR Synopsis LIKE '%' || :keyword || '%'")
     suspend fun searchNovelsByKeyword(keyword: String): List<ExternalNovelEntity>
 
@@ -76,8 +77,8 @@ interface ExternalNovelDao {
     @Query("SELECT * FROM novels_descs ORDER BY updated_at ASC LIMIT :limit")
     suspend fun getNovelsForUpdateCheck(limit: Int = 50): List<ExternalNovelEntity>
 
-    // エピソード更新日時の範囲で小説を検索
-    @Query("SELECT DISTINCT n.* FROM novels_descs n JOIN episodes e ON n.ncode = e.ncode WHERE e.update_time BETWEEN :startDate AND :endDate ORDER BY e.update_time DESC")
+    // エピソード更新日時の範囲で小説を検索 (n_codeカラムに修正)
+    @Query("SELECT DISTINCT n.* FROM novels_descs n JOIN episodes e ON n.n_code = e.ncode WHERE e.update_time BETWEEN :startDate AND :endDate ORDER BY e.update_time DESC")
     suspend fun getNovelsWithEpisodesUpdatedBetween(startDate: String, endDate: String): List<ExternalNovelEntity>
 
     // 作者で小説を検索

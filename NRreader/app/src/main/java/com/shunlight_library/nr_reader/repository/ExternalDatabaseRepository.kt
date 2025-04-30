@@ -42,6 +42,12 @@ class ExternalDatabaseRepository(
     /**
      * 外部DBから小説データを読み込んで内部DBに同期
      */
+// 修正が必要な部分のみを抜粋
+
+    /**
+     * 外部DBから小説データを読み込んで内部DBに同期
+     * n_codeカラムを考慮するよう修正
+     */
     suspend fun synchronizeWithExternalDatabase(shouldCopyToInternal: Boolean, externalDbUri: Uri): Boolean {
         _progressMessage.value = "外部データベースへの接続を準備しています..."
         _processedCount.set(0)
@@ -77,7 +83,6 @@ class ExternalDatabaseRepository(
                 _progressMessage.value = "データベースへの接続に失敗しました"
                 return false
             }
-
 
             // 3. データの同期開始
             val externalDao = externalDb.externalNovelDao()
@@ -119,7 +124,7 @@ class ExternalDatabaseRepository(
                     // 内部DBモデルに変換
                     val novel = Novel(
                         title = externalNovel.title,
-                        ncode = externalNovel.ncode,
+                        ncode = externalNovel.ncode, // ここはフィールド名を使用（内部表現では既にncode）
                         lastReadEpisode = lastRead?.episode_no ?: 1,
                         totalEpisodes = externalNovel.total_ep ?: 0,
                         unreadCount = calculateUnreadCount(
@@ -130,7 +135,7 @@ class ExternalDatabaseRepository(
 
                     // 拡張情報オブジェクト
                     val novelExtended = NovelExtendedEntity(
-                        ncode = externalNovel.ncode,
+                        ncode = externalNovel.ncode, // ここはフィールド名を使用
                         author = externalNovel.author,
                         synopsis = externalNovel.Synopsis ?: "",
                         mainTags = mainTags.joinToString(","),
@@ -171,10 +176,7 @@ class ExternalDatabaseRepository(
             saveLastReadNovelInfo(externalDao)
 
             // 6. 完了
-            // 修正: 文字列内での変数参照を書式文字列に変更
-// 162行目
-            _progressMessage.value = "データベース同期が完了しました！ ${novelCount}件の小説を同期しました。"
-// 163行目
+            _progressMessage.value = "データベース同期が完了しました！${novelCount}件の小説を同期しました。"
             Log.d(TAG, "データベース同期完了: ${novelCount}件の小説を同期")
             return true
 
@@ -184,7 +186,6 @@ class ExternalDatabaseRepository(
             return false
         }
     }
-
     /**
      * 未読エピソード数を計算する
      */

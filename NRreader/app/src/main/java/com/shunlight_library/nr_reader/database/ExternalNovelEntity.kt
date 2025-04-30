@@ -1,11 +1,13 @@
 package com.shunlight_library.nr_reader.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * 外部DBの小説概要情報テーブル (novels_descs)
+ * エラーメッセージに基づいて修正：n_codeカラムをncodeフィールドにマッピング
  */
 @Entity(
     tableName = "novels_descs",
@@ -13,22 +15,43 @@ import androidx.room.PrimaryKey
         Index(name = "idx_novels_last_update", value = ["last_update_date"]),
         Index(
             name = "idx_novels_update_check",
-            value = ["ncode", "rating", "total_ep", "general_all_no", "updated_at"]
+            value = ["n_code", "rating", "total_ep", "general_all_no", "updated_at"]
         )
     ]
 )
 data class ExternalNovelEntity(
+    @ColumnInfo(name = "n_code") // 実際のDB列名に合わせる
     @PrimaryKey
     val ncode: String,
+
+    @ColumnInfo(name = "title")
     val title: String,
+
+    @ColumnInfo(name = "author")
     val author: String,
-    val Synopsis: String?, // 注: DBスキーマに合わせて大文字始まり
+
+    @ColumnInfo(name = "Synopsis") // 大文字始まりのままキープ
+    val Synopsis: String?,
+
+    @ColumnInfo(name = "main_tag")
     val main_tag: String?,
+
+    @ColumnInfo(name = "sub_tag")
     val sub_tag: String?,
+
+    @ColumnInfo(name = "rating")
     val rating: Int?,
+
+    @ColumnInfo(name = "last_update_date")
     val last_update_date: String?,
+
+    @ColumnInfo(name = "total_ep")
     val total_ep: Int?,
+
+    @ColumnInfo(name = "general_all_no")
     val general_all_no: Int?,
+
+    @ColumnInfo(name = "updated_at")
     val updated_at: String?
 )
 
