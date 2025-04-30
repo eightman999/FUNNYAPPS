@@ -768,7 +768,17 @@ fun NovelListScreen(
         try {
             isDbEnabled = settingsStore.isDatabaseEnabled()
             Log.d("NovelListScreen", "外部DB有効状態: $isDbEnabled")
+            val dbEnabled = settingsStore.dbEnabled.first()
+            val dbUri = settingsStore.dbUri.first()
+            val copyToInternal = settingsStore.dbCopyToInternal.first()
 
+            Log.d("NovelListScreen", "DB設定: 有効=$dbEnabled, URI=$dbUri, コピー=$copyToInternal")
+
+            // 権限の確認
+            val hasPermission = if (dbUri.isNotEmpty()) {
+                settingsStore.hasValidDatabaseUri(dbUri)
+            } else false
+            Log.d("NovelListScreen", "DB URI権限: $hasPermission")
             // 外部DBが有効な場合は、DB経由で小説リストを取得
             if (isDbEnabled) {
                 progressMessage = "データベースから小説データを読み込んでいます..."
