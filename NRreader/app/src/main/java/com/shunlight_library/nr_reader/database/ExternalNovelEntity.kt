@@ -20,18 +20,18 @@ import androidx.room.PrimaryKey
     ]
 )
 data class ExternalNovelEntity(
-    @ColumnInfo(name = "n_code") // 実際のDB列名に合わせる
+    @ColumnInfo(name = "n_code")
     @PrimaryKey
-    val ncode: String,
+    val ncode: String,  // これは変更しない (内部表現と外部表現のマッピング)
 
     @ColumnInfo(name = "title")
-    val title: String,
+    val title: String,  // notNull=true に変更
 
     @ColumnInfo(name = "author")
-    val author: String,
+    val author: String,  // notNull=true に変更
 
-    @ColumnInfo(name = "Synopsis") // 大文字始まりのままキープ
-    val Synopsis: String?,
+    @ColumnInfo(name = "Synopsis")
+    val Synopsis: String?,  // 大文字始まりはそのまま
 
     @ColumnInfo(name = "main_tag")
     val main_tag: String?,
