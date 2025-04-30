@@ -100,8 +100,7 @@ fun DatabaseSettingsScreen(
     }
 
     // 進行状況の監視
-    LaunchedEffect(key1 = Unit) {
-        // 外部リポジトリの進行状況を監視
+    LaunchedEffect(key1 = externalDbRepository) {
         externalDbRepository.progressMessage.collect { message ->
             progressMessage = message
         }
