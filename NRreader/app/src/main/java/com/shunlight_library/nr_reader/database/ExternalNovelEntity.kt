@@ -1,5 +1,6 @@
 package com.shunlight_library.nr_reader.database
 
+import androidx.annotation.NonNull
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
@@ -78,17 +79,21 @@ data class EpisodeEntity(
  */
 @Entity(
     tableName = "rast_read_novel",
-    primaryKeys = ["ncode", "date"], // 主キーを複数指定
-    indices = [
-        Index(name = "idx_last_read", value = ["ncode", "date"])
-    ]
+    primaryKeys = ["ncode", "date"],
+    indices = [Index(value = ["ncode", "date"], name = "idx_last_read")]
 )
 data class LastReadNovelEntity(
-    val ncode: String,
-    val date: String?, // 主キーの一部
-    val episode_no: Int?
-)
+    @NonNull
+    @ColumnInfo(name = "ncode")
+    val ncode: String, // NullableからNonNullに変更
 
+    @NonNull
+    @ColumnInfo(name = "date")
+    val date: String,  // NullableからNonNullに変更
+
+    @ColumnInfo(name = "episode_no")
+    val episode_no: Int? // これはNullableのまま
+)
 /**
  * 内部表現用の小説データモデル
  * (外部DBと内部データモデルの橋渡し役)
