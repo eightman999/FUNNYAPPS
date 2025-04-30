@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         NovelEntity::class,
         NovelExtendedEntity::class  // 拡張情報エンティティを追加
     ],
-    version = 2,  // バージョンを上げる
+    version = 3,  // バージョンを上げる
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
