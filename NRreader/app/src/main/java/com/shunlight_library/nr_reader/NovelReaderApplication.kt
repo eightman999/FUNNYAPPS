@@ -46,7 +46,9 @@ class NovelReaderApplication : Application() {
                 // 外部データベース設定を確認
                 val dbEnabled = settingsStore.dbEnabled.first()
                 val dbUri = settingsStore.dbUri.first()
-                val dbCopyToInternal = settingsStore.dbCopyToInternal.first()
+
+                // dbCopyToInternalの設定値は使用せず、常に内部ファイルを使用する
+                val dbCopyToInternal = true
 
                 Log.d(TAG, "DB設定: 有効=$dbEnabled, URI=$dbUri, コピー=$dbCopyToInternal")
 
@@ -56,22 +58,16 @@ class NovelReaderApplication : Application() {
 
                     // パフォーマンスの観点から、アプリ起動時には同期は行わず、
                     // DBへの接続のみを行う
-                    if (dbCopyToInternal) {
-                        // 既にコピー済みの場合は、内部ファイルをそのまま使用
-                        // (ユーザーが明示的に同期ボタンを押した時のみ再コピー)
-                        externalDbHandler.setExternalDatabaseUri(android.net.Uri.parse(dbUri))
-                    } else {
-                        // 直接URIを設定
-                        externalDbHandler.setExternalDatabaseUri(android.net.Uri.parse(dbUri))
-                    }
+                    // 常に内部ファイルを使用（コピーは同期時に行われる）
+                    externalDbHandler.setExternalDatabaseUri(android.net.Uri.parse(dbUri))
 
                     // 内部DBが空の場合は同期を行う
                     val novelCount = repository.getNovelCount()
                     if (novelCount == 0) {
                         Log.d(TAG, "内部DBが空のため、外部DBと同期します")
-                        // この場合はバックグラウンドで同期
+                        // この場合はバックグラウンドで同期（常に内部コピー）
                         externalDbRepository.synchronizeWithExternalDatabase(
-                            shouldCopyToInternal = dbCopyToInternal,
+                            shouldCopyToInternal = true,
                             externalDbUri = android.net.Uri.parse(dbUri)
                         )
                     }

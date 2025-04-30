@@ -242,11 +242,11 @@ class SettingsStore(private val context: Context) {
         try {
             context.dataStore.edit { preferences ->
                 preferences[DB_URI] = dbUri
-                preferences[DB_COPY_TO_INTERNAL] = copyToInternal
+                preferences[DB_COPY_TO_INTERNAL] = true // 常に内部コピーを強制
                 preferences[DB_ENABLED] = isEnabled
                 preferences[DB_LAST_SYNC] = System.currentTimeMillis()
             }
-            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, コピー=$copyToInternal, 有効=$isEnabled")
+            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, コピー=true, 有効=$isEnabled")
         } catch (e: Exception) {
             Log.e("SettingsStore", "データベース設定の保存エラー: ${e.message}", e)
             throw e

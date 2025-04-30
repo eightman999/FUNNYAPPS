@@ -51,7 +51,7 @@ fun DatabaseSettingsScreen(
     }
 
     // 設定状態
-    var copyToInternal by remember { mutableStateOf(false) }
+    val copyToInternal = true // 常に内部にコピーする設定
     var selectedDbUri by remember { mutableStateOf<Uri?>(null) }
     var dbFilePath by remember { mutableStateOf("") }
 
@@ -146,29 +146,9 @@ fun DatabaseSettingsScreen(
 
                 Divider()
 
-                // 本体コピーの設定
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "本体コピー",
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = copyToInternal,
-                        onCheckedChange = { copyToInternal = it }
-                    )
-                }
-
+                // 説明テキスト（本体コピーについて）
                 Text(
-                    text = if (copyToInternal) {
-                        "データベースファイルを本体ストレージにコピーします。処理は遅くなりますが、SDカードが取り外されても使用できます。"
-                    } else {
-                        "データベースファイルを直接参照します。処理は速くなりますが、SDカードが必要です。"
-                    },
+                    text = "データベースファイルは常に本体ストレージにコピーされます。これによりSDカードが取り外されても使用できるようになります。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -234,9 +214,9 @@ fun DatabaseSettingsScreen(
 
                         scope.launch {
                             try {
-                                // DBとの同期処理を実行
+                                // DBとの同期処理を実行（常に内部コピー）
                                 val success = externalDbRepository.synchronizeWithExternalDatabase(
-                                    shouldCopyToInternal = copyToInternal,
+                                    shouldCopyToInternal = true, // 常に内部コピー
                                     externalDbUri = selectedDbUri!!
                                 )
 
@@ -250,10 +230,10 @@ fun DatabaseSettingsScreen(
                                         Toast.LENGTH_SHORT
                                     ).show()
 
-                                    // 設定を保存
+                                    // 設定を保存（常に内部コピー）
                                     settingsStore.saveDatabaseSettings(
                                         dbUri = selectedDbUri.toString(),
-                                        copyToInternal = copyToInternal,
+                                        copyToInternal = true, // 常に内部コピー
                                         isEnabled = true
                                     )
 

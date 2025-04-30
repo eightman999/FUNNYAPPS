@@ -48,32 +48,27 @@ class ExternalDatabaseRepository(
         _totalCount = 0
 
         try {
-            // 1. DBの準備
-            if (shouldCopyToInternal) {
-                // 内部ストレージにコピー
-                val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
-                if (!copySuccess) {
-                    _progressMessage.value = "データベースのコピーに失敗しました"
-                    return false
-                }
+            // 1. 常に内部ストレージにコピー
+            _progressMessage.value = "データベースを内部ストレージにコピーしています..."
+            val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
+            if (!copySuccess) {
+                _progressMessage.value = "データベースのコピーに失敗しました"
+                return false
+            }
 
-                // コピーしたファイルの存在確認
-                val dbFile = context.getDatabasePath(INTERNAL_DB_NAME)
-                if (!dbFile.exists()) {
-                    Log.e(TAG, "コピー後のデータベースファイルが見つかりません: ${dbFile.absolutePath}")
-                    _progressMessage.value = "データベースファイルの確認に失敗しました"
-                    return false
-                }
+            // コピーしたファイルの存在確認
+            val dbFile = context.getDatabasePath(INTERNAL_DB_NAME)
+            if (!dbFile.exists()) {
+                Log.e(TAG, "コピー後のデータベースファイルが見つかりません: ${dbFile.absolutePath}")
+                _progressMessage.value = "データベースファイルの確認に失敗しました"
+                return false
+            }
 
-                // ファイルサイズを確認
-                if (dbFile.length() == 0L) {
-                    Log.e(TAG, "コピーされたデータベースファイルが空です: ${dbFile.absolutePath}")
-                    _progressMessage.value = "コピーされたデータベースファイルが空です"
-                    return false
-                }
-            } else {
-                // 直接外部DBを使用
-                dbHandler.setExternalDatabaseUri(externalDbUri)
+            // ファイルサイズを確認
+            if (dbFile.length() == 0L) {
+                Log.e(TAG, "コピーされたデータベースファイルが空です: ${dbFile.absolutePath}")
+                _progressMessage.value = "コピーされたデータベースファイルが空です"
+                return false
             }
 
             // 2. 外部DBへの接続
