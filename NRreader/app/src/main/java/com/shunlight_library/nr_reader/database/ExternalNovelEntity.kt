@@ -78,14 +78,14 @@ data class EpisodeEntity(
  */
 @Entity(
     tableName = "rast_read_novel",
+    primaryKeys = ["ncode", "date"], // 主キーを複数指定
     indices = [
         Index(name = "idx_last_read", value = ["ncode", "date"])
     ]
 )
 data class LastReadNovelEntity(
-    @PrimaryKey
     val ncode: String,
-    val date: String?,
+    val date: String?, // 主キーの一部
     val episode_no: Int?
 )
 
