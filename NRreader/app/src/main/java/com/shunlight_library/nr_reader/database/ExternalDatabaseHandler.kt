@@ -167,6 +167,10 @@ class ExternalDatabaseHandler(private val context: Context) {
             throw FileNotFoundException("コピーされたデータベースファイルが見つかりません")
         }
 
+        // デバッグ情報を追加
+        Log.d(TAG, "外部データベースファイルパス: ${copiedDbFile.absolutePath}")
+        Log.d(TAG, "データベースサイズ: ${copiedDbFile.length()} バイト")
+
         // 外部DBに接続
         val externalDb = SQLiteDatabase.openDatabase(
             copiedDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
@@ -175,56 +179,143 @@ class ExternalDatabaseHandler(private val context: Context) {
         val novels = mutableListOf<ExternalNovel>()
 
         try {
-            // 小説情報を取得
+            // まずテーブル一覧を確認
+            val tablesCursor = externalDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null)
+            val tablesList = mutableListOf<String>()
+            tablesCursor.use {
+                while (it.moveToNext()) {
+                    tablesList.add(it.getString(0))
+                }
+            }
+            Log.d(TAG, "データベース内のテーブル: $tablesList")
+
+            // 正しいテーブル名を決定（novels_descsがない場合の代替テーブルを探す）
+            val novelTableName = if (tablesList.contains("novels_descs")) {
+                "novels_descs"
+            } else if (tablesList.contains("novels")) {
+                "novels"
+            } else {
+                // 小説テーブルの候補を探す
+                tablesList.find { it.contains("novel") || it.contains("book") } ?: "novels_descs"
+            }
+
+            Log.d(TAG, "使用するテーブル名: $novelTableName")
+
+            // テーブルの構造を確認
+            val columnsCursor = externalDb.rawQuery("PRAGMA table_info($novelTableName)", null)
+            val columns = mutableListOf<String>()
+            columnsCursor.use {
+                while (it.moveToNext()) {
+                    columns.add(it.getString(1)) // カラム名
+                }
+            }
+            Log.d(TAG, "テーブルのカラム: $columns")
+
+            // カラム名のマッピング
+            val ncodeColumn = columns.find { it == "n_code" || it == "ncode" } ?: "n_code"
+            val titleColumn = columns.find { it == "title" } ?: "title"
+            val authorColumn = columns.find { it == "author" } ?: "author"
+            val synopsisColumn = columns.find { it == "Synopsis" || it == "synopsis" } ?: "Synopsis"
+            val mainTagColumn = columns.find { it == "main_tag" || it == "mainTag" } ?: "main_tag"
+            val subTagColumn = columns.find { it == "sub_tag" || it == "subTag" } ?: "sub_tag"
+            val ratingColumn = columns.find { it == "rating" } ?: "rating"
+            val lastUpdateColumn = columns.find { it == "last_update_date" || it == "lastUpdate" } ?: "last_update_date"
+            val totalEpColumn = columns.find { it == "total_ep" || it == "totalEpisodes" } ?: "total_ep"
+            val generalAllNoColumn = columns.find { it == "general_all_no" || it == "generalAllNo" } ?: "general_all_no"
+
+            // レコード数を確認
+            val countCursor = externalDb.rawQuery("SELECT COUNT(*) FROM $novelTableName", null)
+            var recordCount = 0
+            countCursor.use {
+                if (it.moveToFirst()) {
+                    recordCount = it.getInt(0)
+                }
+            }
+            Log.d(TAG, "テーブルのレコード数: $recordCount")
+
+            // データを取得
             val cursor = externalDb.query(
-                "novels_descs",
+                novelTableName,
                 null, // 全カラム
                 null, // WHERE句なし
                 null, // WHERE句の引数なし
                 null, // GROUP BY
                 null, // HAVING
-                "last_update_date DESC" // ORDER BY
+                null  // ORDER BYを一旦削除して全データ取得
             )
+
+            Log.d(TAG, "クエリ実行完了 - 取得した行数: ${cursor.count}")
 
             cursor.use {
                 if (cursor.moveToFirst()) {
                     do {
-                        val ncode = cursor.getString(cursor.getColumnIndexOrThrow("n_code"))
-                        val title = cursor.getString(cursor.getColumnIndexOrThrow("title"))
-                        val author = cursor.getString(cursor.getColumnIndexOrThrow("author"))
-                        val synopsis = cursor.getString(cursor.getColumnIndexOrThrow("Synopsis"))
-                        val mainTag = cursor.getString(cursor.getColumnIndexOrThrow("main_tag"))
-                        val subTag = cursor.getString(cursor.getColumnIndexOrThrow("sub_tag"))
-                        val rating = cursor.getInt(cursor.getColumnIndexOrThrow("rating"))
-                        val lastUpdateDate = cursor.getString(cursor.getColumnIndexOrThrow("last_update_date"))
-                        val totalEp = cursor.getInt(cursor.getColumnIndexOrThrow("total_ep"))
-                        val generalAllNo = cursor.getInt(cursor.getColumnIndexOrThrow("general_all_no"))
+                        try {
+                            // 各カラムのインデックスを取得（存在しない場合は例外をキャッチ）
+                            val ncodeIndex = try { cursor.getColumnIndexOrThrow(ncodeColumn) } catch (e: Exception) { -1 }
+                            val titleIndex = try { cursor.getColumnIndexOrThrow(titleColumn) } catch (e: Exception) { -1 }
+                            val authorIndex = try { cursor.getColumnIndexOrThrow(authorColumn) } catch (e: Exception) { -1 }
+                            val synopsisIndex = try { cursor.getColumnIndexOrThrow(synopsisColumn) } catch (e: Exception) { -1 }
+                            val mainTagIndex = try { cursor.getColumnIndexOrThrow(mainTagColumn) } catch (e: Exception) { -1 }
+                            val subTagIndex = try { cursor.getColumnIndexOrThrow(subTagColumn) } catch (e: Exception) { -1 }
+                            val ratingIndex = try { cursor.getColumnIndexOrThrow(ratingColumn) } catch (e: Exception) { -1 }
+                            val lastUpdateIndex = try { cursor.getColumnIndexOrThrow(lastUpdateColumn) } catch (e: Exception) { -1 }
+                            val totalEpIndex = try { cursor.getColumnIndexOrThrow(totalEpColumn) } catch (e: Exception) { -1 }
+                            val generalAllNoIndex = try { cursor.getColumnIndexOrThrow(generalAllNoColumn) } catch (e: Exception) { -1 }
 
-                        // 最後に読んだエピソード情報を取得
-                        val lastReadEpisode = getLastReadEpisode(externalDb, ncode)
+                            // 各カラムの値を取得（インデックスが有効な場合のみ）
+                            val ncode = if (ncodeIndex >= 0) cursor.getString(ncodeIndex) else "unknown"
+                            val title = if (titleIndex >= 0) cursor.getString(titleIndex) ?: "タイトルなし" else "タイトルなし"
+                            val author = if (authorIndex >= 0) cursor.getString(authorIndex) ?: "作者不明" else "作者不明"
+                            val synopsis = if (synopsisIndex >= 0) cursor.getString(synopsisIndex) else null
+                            val mainTag = if (mainTagIndex >= 0) cursor.getString(mainTagIndex) else null
+                            val subTag = if (subTagIndex >= 0) cursor.getString(subTagIndex) else null
+                            val rating = if (ratingIndex >= 0) cursor.getInt(ratingIndex) else 0
+                            val lastUpdateDate = if (lastUpdateIndex >= 0) cursor.getString(lastUpdateIndex) else null
+                            val totalEp = if (totalEpIndex >= 0) cursor.getInt(totalEpIndex) else 0
+                            val generalAllNo = if (generalAllNoIndex >= 0) cursor.getInt(generalAllNoIndex) else 0
 
-                        // タグをリストに変換
-                        val mainTags = mainTag?.split(",")?.map { it.trim() } ?: emptyList()
-                        val subTags = subTag?.split(",")?.map { it.trim() } ?: emptyList()
+                            if (ncode == "unknown") {
+                                Log.d(TAG, "ncodeが取得できませんでした。スキップします。")
+                                continue
+                            }
 
-                        val novel = ExternalNovel(
-                            title = title ?: "タイトルなし",
-                            ncode = ncode,
-                            author = author ?: "作者不明",
-                            synopsis = synopsis,
-                            mainTags = mainTags,
-                            subTags = subTags,
-                            rating = rating ?: 0,
-                            lastUpdateDate = lastUpdateDate,
-                            totalEpisodes = totalEp ?: 0,
-                            generalAllNo = generalAllNo ?: 0,
-                            lastReadEpisode = lastReadEpisode
-                        )
+                            // デバッグ用：取得したデータを出力
+                            Log.d(TAG, "取得データ: ncode=$ncode, title=$title")
 
-                        novels.add(novel)
+                            // 最後に読んだエピソード情報を取得
+                            val lastReadEpisode = getLastReadEpisode(externalDb, ncode)
+
+                            // タグをリストに変換
+                            val mainTags = mainTag?.split(",")?.map { it.trim() } ?: emptyList()
+                            val subTags = subTag?.split(",")?.map { it.trim() } ?: emptyList()
+
+                            val novel = ExternalNovel(
+                                title = title,
+                                ncode = ncode,
+                                author = author,
+                                synopsis = synopsis,
+                                mainTags = mainTags,
+                                subTags = subTags,
+                                rating = rating,
+                                lastUpdateDate = lastUpdateDate,
+                                totalEpisodes = totalEp,
+                                generalAllNo = generalAllNo,
+                                lastReadEpisode = lastReadEpisode
+                            )
+
+                            novels.add(novel)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "レコードの処理中にエラーが発生しました: ${e.message}", e)
+                            // エラーが発生しても続行
+                        }
                     } while (cursor.moveToNext())
                 }
             }
+
+            Log.d(TAG, "小説データ取得完了: ${novels.size}件")
+        } catch (e: Exception) {
+            Log.e(TAG, "外部DBからのデータ取得エラー: ${e.message}", e)
+            throw e
         } finally {
             externalDb.close()
         }
