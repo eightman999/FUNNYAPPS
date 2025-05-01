@@ -806,19 +806,24 @@ fun NovelListScreen(
         try {
             // 自己サーバーの有効性チェック
             if (!selfServerAccess || selfServerPath.isEmpty()) {
-                Log.d("NovelListScreen", "自己サーバーモードが無効またはパスが空")
-                errorMessage = "自己サーバーモードが無効です。設定画面で有効にしてください。"
-                isLoading = false
-                return@LaunchedEffect
-            }
+                Log.d("NovelListScreen", "自己サーバーモードが無効またはパスが空。内部DBからデータを読み込みます。")
 
-            // 権限のチェック
-            hasValidPermission = settingsStore.hasPersistedPermission(selfServerPath)
-            Log.d("NovelListScreen", "権限チェック: $hasValidPermission")
+                // 内部DBに小説データが存在するか確認
+                val hasNovels = repository.hasAnyNovels()
+                if (hasNovels) {
+                    // 内部DBから小説データを読み込む
+                    progressMessage = "保存済みの小説データを読み込んでいます..."
 
-            if (!hasValidPermission) {
-                errorMessage = "自己サーバーへのアクセス権限がありません。設定画面で再設定してください。"
-                isLoading = false
+                    repository.getAllNovels().collect { allNovels ->
+                        novels = allNovels
+                        isLoading = false
+                    }
+                } else {
+                    // 内部DBに小説データがない場合
+                    errorMessage = "小説データがありません。自己サーバーモードを有効にするか、DBからデータをインポートしてください。"
+                    isLoading = false
+                }
+
                 return@LaunchedEffect
             }
 
