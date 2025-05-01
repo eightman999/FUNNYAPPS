@@ -1,3 +1,4 @@
+// ExternalDatabaseRepository.kt の修正
 package com.shunlight_library.nr_reader.repository
 
 import android.content.Context
@@ -34,11 +35,13 @@ class ExternalDatabaseRepository(
         _totalCount = 0
 
         try {
-            _progressMessage.value = "データベースを内部ストレージにコピーしています..."
-            val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
-            if (!copySuccess) {
-                _progressMessage.value = "データベースのコピーに失敗しました"
-                return false
+            if (shouldCopyToInternal) {
+                _progressMessage.value = "データベースを内部ストレージにコピーしています..."
+                val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
+                if (!copySuccess) {
+                    _progressMessage.value = "データベースのコピーに失敗しました"
+                    return false
+                }
             }
 
             val dbFile = context.getDatabasePath(ExternalDatabaseHandler.INTERNAL_DB_NAME)
@@ -52,16 +55,21 @@ class ExternalDatabaseRepository(
             val externalNovels: List<ExternalNovel> = dbHandler.getAllNovelsFromExternalDB()
             _totalCount = externalNovels.size
 
-            _progressMessage.value = "内部データベースにデータを同期しています..."
+            _progressMessage.value = "内部データベースにデータを同期しています... (0/${_totalCount})"
             withContext(Dispatchers.IO) {
-                externalNovels.forEach { novel ->
+                externalNovels.forEachIndexed { index, novel ->
                     appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
-                    _processedCount.incrementAndGet()
+                    val processed = _processedCount.incrementAndGet()
+
+                    // 進捗メッセージを更新
+                    if (processed % 10 == 0 || processed == _totalCount) {
+                        _progressMessage.value = "内部データベースにデータを同期しています... ($processed/${_totalCount})"
+                    }
                 }
             }
 
             _progressMessage.value = "データベースの同期が完了しました"
-            Log.d(TAG, "データベース同期完了: ${dbFile.absolutePath}")
+            Log.d(TAG, "データベース同期完了: ${externalNovels.size}件の小説を同期")
             return true
 
         } catch (e: Exception) {

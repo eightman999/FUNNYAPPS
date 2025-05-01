@@ -1,6 +1,7 @@
 package com.shunlight_library.nr_reader.database
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -158,5 +159,108 @@ class ExternalDatabaseHandler(private val context: Context) {
             size < 1024 * 1024 * 1024 -> "${size / (1024 * 1024)} MB"
             else -> "${size / (1024 * 1024 * 1024)} GB"
         }
+    }
+    // ExternalDatabaseHandler.kt に追加するメソッド
+    suspend fun getAllNovelsFromExternalDB(): List<ExternalNovel> {
+        val copiedDbFile = context.getDatabasePath(INTERNAL_DB_NAME)
+        if (!copiedDbFile.exists()) {
+            throw FileNotFoundException("コピーされたデータベースファイルが見つかりません")
+        }
+
+        // 外部DBに接続
+        val externalDb = SQLiteDatabase.openDatabase(
+            copiedDbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+        )
+
+        val novels = mutableListOf<ExternalNovel>()
+
+        try {
+            // 小説情報を取得
+            val cursor = externalDb.query(
+                "novels_descs",
+                null, // 全カラム
+                null, // WHERE句なし
+                null, // WHERE句の引数なし
+                null, // GROUP BY
+                null, // HAVING
+                "last_update_date DESC" // ORDER BY
+            )
+
+            cursor.use {
+                if (cursor.moveToFirst()) {
+                    do {
+                        val ncode = cursor.getString(cursor.getColumnIndexOrThrow("n_code"))
+                        val title = cursor.getString(cursor.getColumnIndexOrThrow("title"))
+                        val author = cursor.getString(cursor.getColumnIndexOrThrow("author"))
+                        val synopsis = cursor.getString(cursor.getColumnIndexOrThrow("Synopsis"))
+                        val mainTag = cursor.getString(cursor.getColumnIndexOrThrow("main_tag"))
+                        val subTag = cursor.getString(cursor.getColumnIndexOrThrow("sub_tag"))
+                        val rating = cursor.getInt(cursor.getColumnIndexOrThrow("rating"))
+                        val lastUpdateDate = cursor.getString(cursor.getColumnIndexOrThrow("last_update_date"))
+                        val totalEp = cursor.getInt(cursor.getColumnIndexOrThrow("total_ep"))
+                        val generalAllNo = cursor.getInt(cursor.getColumnIndexOrThrow("general_all_no"))
+
+                        // 最後に読んだエピソード情報を取得
+                        val lastReadEpisode = getLastReadEpisode(externalDb, ncode)
+
+                        // タグをリストに変換
+                        val mainTags = mainTag?.split(",")?.map { it.trim() } ?: emptyList()
+                        val subTags = subTag?.split(",")?.map { it.trim() } ?: emptyList()
+
+                        val novel = ExternalNovel(
+                            title = title ?: "タイトルなし",
+                            ncode = ncode,
+                            author = author ?: "作者不明",
+                            synopsis = synopsis,
+                            mainTags = mainTags,
+                            subTags = subTags,
+                            rating = rating ?: 0,
+                            lastUpdateDate = lastUpdateDate,
+                            totalEpisodes = totalEp ?: 0,
+                            generalAllNo = generalAllNo ?: 0,
+                            lastReadEpisode = lastReadEpisode
+                        )
+
+                        novels.add(novel)
+                    } while (cursor.moveToNext())
+                }
+            }
+        } finally {
+            externalDb.close()
+        }
+
+        return novels
+    }
+
+    // 特定の小説の最後に読んだエピソード番号を取得
+    private fun getLastReadEpisode(db: SQLiteDatabase, ncode: String): Int {
+        var lastReadEpisode = 1
+
+        try {
+            val cursor = db.query(
+                "rast_read_novel",
+                arrayOf("episode_no"),
+                "ncode = ?",
+                arrayOf(ncode),
+                null,
+                null,
+                "date DESC",
+                "1" // 最新の1件
+            )
+
+            cursor.use {
+                if (it.moveToFirst()) {
+                    val epIndex = it.getColumnIndex("episode_no")
+                    if (epIndex >= 0) {
+                        lastReadEpisode = it.getInt(epIndex)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "最後に読んだエピソード番号の取得に失敗しました: $ncode", e)
+            // デフォルト値の1を使用
+        }
+
+        return lastReadEpisode
     }
 }
