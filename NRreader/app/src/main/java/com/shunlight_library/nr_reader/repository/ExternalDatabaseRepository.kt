@@ -4,6 +4,7 @@ package com.shunlight_library.nr_reader.repository
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.room.withTransaction
 import com.shunlight_library.nr_reader.database.AppDatabase
 import com.shunlight_library.nr_reader.database.ExternalDatabaseHandler
 import com.shunlight_library.nr_reader.database.ExternalNovel
@@ -60,21 +61,21 @@ class ExternalDatabaseRepository(
 
             // トランザクションを使用して一括処理
             withContext(Dispatchers.IO) {
-                // AppDatabaseがrunInTransactionメソッドを持つ場合
-                appDatabase.runInTransaction {
-                    externalNovels.forEachIndexed { index, novel ->
-                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
-                        val processed = _processedCount.incrementAndGet()
-
-                        // 進捗メッセージを更新
-                        if (processed % 10 == 0 || processed == _totalCount) {
-                            _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
-                        }
-                    }
-                }
+//                // AppDatabaseがrunInTransactionメソッドを持つ場合
+//                appDatabase.runInTransaction {
+//                    externalNovels.forEachIndexed { index, novel ->
+//                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
+//                        val processed = _processedCount.incrementAndGet()
+//
+//                        // 進捗メッセージを更新
+//                        if (processed % 10 == 0 || processed == _totalCount) {
+//                            _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
+//                        }
+//                    }
+//                }
 
                 // 代替案: Room 2.2.0以降では以下も可能
-                /*
+
                 appDatabase.withTransaction {
                     externalNovels.forEachIndexed { index, novel ->
                         appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
@@ -85,7 +86,7 @@ class ExternalDatabaseRepository(
                         }
                     }
                 }
-                */
+
             }
 
             _progressMessage.value = "データベースの同期が完了しました"
