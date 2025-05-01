@@ -221,7 +221,7 @@ class ExternalDatabaseHandler(private val context: Context) {
             Log.d(TAG, "テーブルのカラム: $columns")
 
             // カラム名のマッピング
-            val ncodeColumn = columns.find { it == "n_code" || it == "ncode" } ?: "n_code"
+            val ncodeColumn = columns.find { it == "n_code" || it == "ncode" } ?: "ncode"
             val titleColumn = columns.find { it == "title" } ?: "title"
             val authorColumn = columns.find { it == "author" } ?: "author"
             val synopsisColumn = columns.find { it == "Synopsis" || it == "synopsis" } ?: "Synopsis"

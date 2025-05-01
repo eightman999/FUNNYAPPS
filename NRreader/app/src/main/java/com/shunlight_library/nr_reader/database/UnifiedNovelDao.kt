@@ -3,73 +3,56 @@ package com.shunlight_library.nr_reader.database
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
-/**
- * 小説データベースへの統合アクセス用DAO
- */
-// UnifiedNovelDao.kt の修正箇所
-
 @Dao
-interface UnifiedNovelDao {
-    // 全小説を取得（Flow版）
-    @Query("SELECT * FROM novels ORDER BY last_updated DESC")
-    fun getAllNovels(): Flow<List<UnifiedNovelEntity>>
+interface NovelDescDao {
+    @Query("SELECT * FROM novels_descs ORDER BY last_update_date DESC")
+    fun getAllNovels(): Flow<List<NovelDescEntity>>
 
-    // 全小説を取得（同期版）
-    @Query("SELECT * FROM novels ORDER BY last_updated DESC")
-    suspend fun getAllNovelsSync(): List<UnifiedNovelEntity>
+    @Query("SELECT * FROM novels_descs ORDER BY last_update_date DESC")
+    suspend fun getAllNovelsSync(): List<NovelDescEntity>
 
-    // 小説の総数を取得
-    @Query("SELECT COUNT(*) FROM novels")
+    @Query("SELECT COUNT(*) FROM novels_descs")
     suspend fun getNovelCount(): Int
 
-    // 特定の小説を取得
-    @Query("SELECT * FROM novels WHERE ncode = :ncode")
-    suspend fun getNovelByNcode(ncode: String): UnifiedNovelEntity?
+    @Query("SELECT * FROM novels_descs WHERE ncode = :ncode")
+    suspend fun getNovelByNcode(ncode: String): NovelDescEntity?
 
-    // 小説を挿入
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(novel: UnifiedNovelEntity)
+    suspend fun insert(novel: NovelDescEntity)
 
-    // 複数の小説を一括挿入
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(novels: List<UnifiedNovelEntity>)
+    suspend fun insertAll(novels: List<NovelDescEntity>)
 
-    // 小説を削除
-    @Query("DELETE FROM novels WHERE ncode = :ncode")
+    @Query("DELETE FROM novels_descs WHERE ncode = :ncode")
     suspend fun deleteNovelByNcode(ncode: String)
 
-    // 最後に読んだエピソード番号を更新
-    @Query("UPDATE novels SET last_read_episode = :episodeNum WHERE ncode = :ncode")
-    suspend fun updateLastReadEpisode(ncode: String, episodeNum: Int)
-
-    // 総エピソード数を更新
-    @Query("UPDATE novels SET total_episodes = :totalCount WHERE ncode = :ncode")
+    @Query("UPDATE novels_descs SET total_ep = :totalCount WHERE ncode = :ncode")
     suspend fun updateTotalEpisodes(ncode: String, totalCount: Int)
+}
 
-    // ExternalNovel型から変換したUnifiedNovelEntityを挿入または更新
-    @Transaction
-    suspend fun insertOrUpdateNovel(novel: ExternalNovel) {
-        val entity = UnifiedNovelEntity(
-            ncode = novel.ncode,
-            title = novel.title,
-            author = novel.author,
-            synopsis = novel.synopsis,
-            mainTags = novel.mainTags.joinToString(","),
-            subTags = novel.subTags.joinToString(","),
-            rating = novel.rating,
-            totalEpisodes = novel.totalEpisodes,
-            lastReadEpisode = novel.lastReadEpisode,
-            lastUpdateDate = novel.lastUpdateDate,
-            generalAllNo = novel.generalAllNo,
-            lastUpdated = System.currentTimeMillis(),
-            lastSynced = System.currentTimeMillis()
-        )
-        insert(entity)
-    }
-    @Transaction
-    suspend fun insertOrUpdateNovelsInBatch(novels: List<ExternalNovel>) {
-        novels.forEach { novel ->
-            insertOrUpdateNovel(novel)
-        }
-    }
+@Dao
+interface EpisodeDao {
+    @Query("SELECT * FROM episodes WHERE ncode = :ncode ORDER BY episode_no ASC")
+    fun getEpisodesByNcode(ncode: String): Flow<List<InternalEpisodeEntity>>
+
+    @Query("SELECT * FROM episodes WHERE ncode = :ncode AND episode_no = :episodeNo")
+    suspend fun getEpisode(ncode: String, episodeNo: String): InternalEpisodeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(episode: InternalEpisodeEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(episodes: List<InternalEpisodeEntity>)
+}
+
+@Dao
+interface LastReadDao {
+    @Query("SELECT * FROM rast_read_novel WHERE ncode = :ncode ORDER BY date DESC LIMIT 1")
+    suspend fun getLastReadByNcode(ncode: String): InternalLastReadEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(lastRead: InternalLastReadEntity)
+
+    @Query("DELETE FROM rast_read_novel WHERE ncode = :ncode")
+    suspend fun deleteByNcode(ncode: String)
 }

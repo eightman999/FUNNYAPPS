@@ -7,7 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * DBの小説概要情報テーブル (novels_descs)
+ * 内部DB用の小説概要情報テーブル (novels_descs)
  */
 @Entity(
     tableName = "novels_descs",
@@ -19,9 +19,9 @@ import androidx.room.PrimaryKey
         )
     ]
 )
-data class ExternalNovelEntity(
-    @ColumnInfo(name = "ncode")  // n_codeからncodeに変更
+data class NovelDescEntity(
     @PrimaryKey
+    @ColumnInfo(name = "ncode")
     val ncode: String,
 
     @ColumnInfo(name = "title")
@@ -53,4 +53,43 @@ data class ExternalNovelEntity(
 
     @ColumnInfo(name = "updated_at")
     val updated_at: String?
+)
+
+/**
+ * 内部DB用のエピソード情報テーブル (episodes)
+ */
+@Entity(
+    tableName = "episodes",
+    primaryKeys = ["ncode", "episode_no"],
+    indices = [
+        Index(name = "idx_episodes_ncode", value = ["ncode", "episode_no"])
+    ]
+)
+data class InternalEpisodeEntity(
+    val ncode: String,
+    val episode_no: String,
+    val body: String?,
+    val e_title: String?,
+    val update_time: String?
+)
+
+/**
+ * 内部DB用の最終読込情報テーブル (rast_read_novel)
+ */
+@Entity(
+    tableName = "rast_read_novel",
+    primaryKeys = ["ncode", "date"],
+    indices = [Index(value = ["ncode", "date"], name = "idx_last_read")]
+)
+data class InternalLastReadEntity(
+    @NonNull
+    @ColumnInfo(name = "ncode")
+    val ncode: String,
+
+    @NonNull
+    @ColumnInfo(name = "date")
+    val date: String,
+
+    @ColumnInfo(name = "episode_no")
+    val episode_no: Int?
 )

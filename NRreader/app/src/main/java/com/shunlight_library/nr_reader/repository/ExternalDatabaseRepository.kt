@@ -5,9 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.room.withTransaction
-import com.shunlight_library.nr_reader.database.AppDatabase
-import com.shunlight_library.nr_reader.database.ExternalDatabaseHandler
-import com.shunlight_library.nr_reader.database.ExternalNovel
+import com.shunlight_library.nr_reader.database.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
@@ -45,14 +43,6 @@ class ExternalDatabaseRepository(
                 return false
             }
 
-            val dbFile = context.getDatabasePath(ExternalDatabaseHandler.INTERNAL_DB_NAME)
-            if (!dbFile.exists() || dbFile.length() == 0L) {
-                Log.e(TAG, "コピーされたデータベースファイルが無効です: ${dbFile.absolutePath}")
-                _progressMessage.value = "データベースファイルの確認に失敗しました"
-                return false
-            }
-
-            // 名称変更したメソッドを呼び出し、メッセージも修正
             _progressMessage.value = "コピーされたデータベースからデータを読み込んでいます..."
             val externalNovels: List<ExternalNovel> = dbHandler.readNovelsFromCopiedDatabase()
             _totalCount = externalNovels.size
@@ -61,32 +51,20 @@ class ExternalDatabaseRepository(
 
             // トランザクションを使用して一括処理
             withContext(Dispatchers.IO) {
-//                // AppDatabaseがrunInTransactionメソッドを持つ場合
-//                appDatabase.runInTransaction {
-//                    externalNovels.forEachIndexed { index, novel ->
-//                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
-//                        val processed = _processedCount.incrementAndGet()
-//
-//                        // 進捗メッセージを更新
-//                        if (processed % 10 == 0 || processed == _totalCount) {
-//                            _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
-//                        }
-//                    }
-//                }
-
-                // 代替案: Room 2.2.0以降では以下も可能
-
                 appDatabase.withTransaction {
                     externalNovels.forEachIndexed { index, novel ->
-                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
-                        val processed = _processedCount.incrementAndGet()
+                        // 小説概要テーブルに保存
+                        appDatabase.novelDescDao().insert(novel.toNovelDescEntity())
 
+                        // 最終読取情報を保存
+                        appDatabase.lastReadDao().insert(novel.toLastReadEntity())
+
+                        val processed = _processedCount.incrementAndGet()
                         if (processed % 10 == 0 || processed == _totalCount) {
                             _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
                         }
                     }
                 }
-
             }
 
             _progressMessage.value = "データベースの同期が完了しました"

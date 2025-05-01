@@ -5,17 +5,20 @@ import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.shunlight_library.nr_reader.Novel
-import com.shunlight_library.nr_reader.database.AppDatabase
-import com.shunlight_library.nr_reader.database.UnifiedNovelEntity
+import com.shunlight_library.nr_reader.database.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 
 class NovelRepository(private val database: AppDatabase, private val context: Context) {
-    private val novelDao = database.UnifiedNovelDao()
+    private val novelDescDao = database.novelDescDao()
+    private val episodeDao = database.episodeDao()
+    private val lastReadDao = database.lastReadDao()
 
     private val _processedCount = AtomicInteger(0)
     private var _totalCount = 0
@@ -29,15 +32,20 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
         _totalCount = 0
     }
 
+    // 小説一覧をフローとして取得
     fun getAllNovels(): Flow<List<Novel>> {
-        return novelDao.getAllNovels().map { entities ->
+        return novelDescDao.getAllNovels().map { entities ->
             entities.map { entity ->
+                // 各小説の最終読み取り位置を取得
+                val lastReadEntity = lastReadDao.getLastReadByNcode(entity.ncode)
+                val lastReadEpisode = lastReadEntity?.episode_no ?: 1
+
                 Novel(
                     title = entity.title,
                     ncode = entity.ncode,
-                    lastReadEpisode = entity.lastReadEpisode,
-                    totalEpisodes = entity.totalEpisodes,
-                    unreadCount = (entity.totalEpisodes - entity.lastReadEpisode).coerceAtLeast(0)
+                    lastReadEpisode = lastReadEpisode,
+                    totalEpisodes = entity.total_ep ?: 0,
+                    unreadCount = ((entity.total_ep ?: 0) - lastReadEpisode).coerceAtLeast(0)
                 )
             }
         }
@@ -45,72 +53,105 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
 
     suspend fun hasAnyNovels(): Boolean {
         return withContext(Dispatchers.IO) {
-            novelDao.getNovelCount() > 0
+            novelDescDao.getNovelCount() > 0
         }
     }
 
     suspend fun getNovelCount(): Int {
         return withContext(Dispatchers.IO) {
-            novelDao.getNovelCount()
+            novelDescDao.getNovelCount()
         }
     }
 
+    // 単一の小説を保存
     suspend fun saveNovel(novel: Novel) {
-        val entity = UnifiedNovelEntity(
+        // 小説情報を保存
+        val entity = NovelDescEntity(
             ncode = novel.ncode,
             title = novel.title,
-            author = "", // 必要に応じて適切な値を設定
-            synopsis = null,
-            mainTags = null,
-            subTags = null,
+            author = "", // 必要に応じて設定
+            Synopsis = null,
+            main_tag = null,
+            sub_tag = null,
             rating = 0,
-            totalEpisodes = novel.totalEpisodes,
-            lastReadEpisode = novel.lastReadEpisode,
-            lastUpdateDate = null,
-            generalAllNo = 0
+            total_ep = novel.totalEpisodes,
+            last_update_date = null,
+            general_all_no = 0,
+            updated_at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         )
-        novelDao.insert(entity)
+        novelDescDao.insert(entity)
+
+        // 最終読み取り位置を保存
+        val lastReadEntity = InternalLastReadEntity(
+            ncode = novel.ncode,
+            date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()),
+            episode_no = novel.lastReadEpisode
+        )
+        lastReadDao.insert(lastReadEntity)
     }
 
+    // 複数の小説を保存
     suspend fun saveNovels(novels: List<Novel>) {
         novels.forEach { novel ->
             saveNovel(novel)
         }
     }
 
+    // 複数の小説をバッチで保存
     suspend fun saveNovelsInBatch(novels: List<Novel>) {
         withContext(Dispatchers.IO) {
-            val entities = novels.map { novel ->
-                UnifiedNovelEntity(
+            // 小説情報のリスト
+            val novelEntities = novels.map { novel ->
+                NovelDescEntity(
                     ncode = novel.ncode,
                     title = novel.title,
-                    author = "", // 必要に応じて適切な値を設定
-                    synopsis = null,
-                    mainTags = null,
-                    subTags = null,
+                    author = "", // 必要に応じて設定
+                    Synopsis = null,
+                    main_tag = null,
+                    sub_tag = null,
                     rating = 0,
-                    totalEpisodes = novel.totalEpisodes,
-                    lastReadEpisode = novel.lastReadEpisode,
-                    lastUpdateDate = null,
-                    generalAllNo = 0
+                    total_ep = novel.totalEpisodes,
+                    last_update_date = null,
+                    general_all_no = 0,
+                    updated_at = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
                 )
             }
-            novelDao.insertAll(entities)
+
+            // 最終読み取り位置のリスト
+            val lastReadEntities = novels.map { novel ->
+                InternalLastReadEntity(
+                    ncode = novel.ncode,
+                    date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()),
+                    episode_no = novel.lastReadEpisode
+                )
+            }
+
+            // バッチで保存
+            novelDescDao.insertAll(novelEntities)
+            lastReadEntities.forEach { lastReadDao.insert(it) }
         }
     }
 
+    // 最終読み取り位置を更新
     suspend fun updateLastReadEpisode(ncode: String, episodeNum: Int) {
-        novelDao.updateLastReadEpisode(ncode, episodeNum)
+        val lastReadEntity = InternalLastReadEntity(
+            ncode = ncode,
+            date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()),
+            episode_no = episodeNum
+        )
+        lastReadDao.insert(lastReadEntity)
     }
 
+    // 総エピソード数を更新
     suspend fun updateTotalEpisodes(ncode: String, totalCount: Int) {
-        novelDao.updateTotalEpisodes(ncode, totalCount)
+        novelDescDao.updateTotalEpisodes(ncode, totalCount)
     }
 
+    // 更新された小説を取得
     suspend fun getUpdatedNovels(serverPath: String): List<Novel> {
         return withContext(Dispatchers.IO) {
             try {
-                val allNovels = novelDao.getAllNovelsSync()
+                val allNovels = novelDescDao.getAllNovelsSync()
                 val updatedNovels = mutableListOf<Novel>()
 
                 _totalCount = allNovels.size
@@ -119,17 +160,21 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
                 for (entity in allNovels) {
                     val currentEpisodeCount = countEpisodesFromFileSystem(serverPath, entity.ncode)
 
-                    if (currentEpisodeCount > entity.totalEpisodes) {
+                    // 最終読み取り位置を取得
+                    val lastReadEntity = lastReadDao.getLastReadByNcode(entity.ncode)
+                    val lastReadEpisode = lastReadEntity?.episode_no ?: 1
+
+                    if (currentEpisodeCount > (entity.total_ep ?: 0)) {
                         val novel = Novel(
                             title = entity.title,
                             ncode = entity.ncode,
-                            lastReadEpisode = entity.lastReadEpisode,
+                            lastReadEpisode = lastReadEpisode,
                             totalEpisodes = currentEpisodeCount,
-                            unreadCount = (currentEpisodeCount - entity.lastReadEpisode).coerceAtLeast(0)
+                            unreadCount = (currentEpisodeCount - lastReadEpisode).coerceAtLeast(0)
                         )
                         updatedNovels.add(novel)
 
-                        novelDao.updateTotalEpisodes(entity.ncode, currentEpisodeCount)
+                        novelDescDao.updateTotalEpisodes(entity.ncode, currentEpisodeCount)
                     }
 
                     _processedCount.incrementAndGet()
@@ -143,7 +188,9 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
         }
     }
 
+    // ファイルシステムからエピソード数を数える
     suspend fun countEpisodesFromFileSystem(serverPath: String, ncode: String): Int {
+        // 既存のコードを再利用
         return withContext(Dispatchers.IO) {
             try {
                 val uri = Uri.parse(serverPath)
@@ -189,21 +236,18 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
             }
         }
     }
+
+    // 以下は既存のコードを保持
     private val PREFS_NAME = "novel_reader_prefs"
     private val KEY_LAST_UPDATE = "last_update_timestamp"
 
-    // 小説データの更新が必要かどうかを判断するメソッド
     suspend fun needsUpdate(): Boolean {
         val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastUpdate = sharedPrefs.getLong(KEY_LAST_UPDATE, 0L)
         val currentTime = System.currentTimeMillis()
-
-        // 24時間（86400000ミリ秒）経過したら更新が必要
-        // または lastUpdate が 0 の場合（初回実行時）
         return currentTime - lastUpdate > 86400000L || lastUpdate == 0L
     }
 
-    // 最終更新タイムスタンプを保存するメソッド
     fun saveLastUpdateTimestamp(timestamp: Long) {
         val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         sharedPrefs.edit().putLong(KEY_LAST_UPDATE, timestamp).apply()
