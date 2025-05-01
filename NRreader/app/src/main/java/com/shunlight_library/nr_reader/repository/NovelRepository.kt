@@ -189,4 +189,23 @@ class NovelRepository(private val database: AppDatabase, private val context: Co
             }
         }
     }
+    private val PREFS_NAME = "novel_reader_prefs"
+    private val KEY_LAST_UPDATE = "last_update_timestamp"
+
+    // 小説データの更新が必要かどうかを判断するメソッド
+    suspend fun needsUpdate(): Boolean {
+        val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val lastUpdate = sharedPrefs.getLong(KEY_LAST_UPDATE, 0L)
+        val currentTime = System.currentTimeMillis()
+
+        // 24時間（86400000ミリ秒）経過したら更新が必要
+        // または lastUpdate が 0 の場合（初回実行時）
+        return currentTime - lastUpdate > 86400000L || lastUpdate == 0L
+    }
+
+    // 最終更新タイムスタンプを保存するメソッド
+    fun saveLastUpdateTimestamp(timestamp: Long) {
+        val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sharedPrefs.edit().putLong(KEY_LAST_UPDATE, timestamp).apply()
+    }
 }
