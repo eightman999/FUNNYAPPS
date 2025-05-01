@@ -39,16 +39,12 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 @Database(
     entities = [
-        NovelEntity::class,
-        NovelExtendedEntity::class,  // 拡張情報エンティティを追加
-        LastReadNovelEntity::class
-    ],
+        UnifiedNovelEntity::class],
     version = 8,  // バージョンを3から4に増やす
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun novelDao(): NovelDao
-    abstract fun novelExtendedDao(): NovelExtendedDao  // 新しいDAOを追加
+    abstract fun UnifiedNovelDao(): UnifiedNovelDao
 
     companion object {
         @Volatile

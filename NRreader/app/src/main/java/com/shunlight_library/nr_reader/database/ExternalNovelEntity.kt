@@ -7,7 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 外部DBの小説概要情報テーブル (novels_descs)
+ * DBの小説概要情報テーブル (novels_descs)
  * エラーメッセージに基づいて修正：n_codeカラムをncodeフィールドにマッピング
  */
 @Entity(
