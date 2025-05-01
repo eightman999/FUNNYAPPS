@@ -43,7 +43,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         NovelExtendedEntity::class,  // 拡張情報エンティティを追加
         LastReadNovelEntity::class
     ],
-    version = 7,  // バージョンを3から4に増やす
+    version = 8,  // バージョンを3から4に増やす
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

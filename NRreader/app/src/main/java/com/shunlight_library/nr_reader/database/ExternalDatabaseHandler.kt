@@ -163,6 +163,7 @@ class ExternalDatabaseHandler(private val context: Context) {
                     )
                     testDb.close()
                     Log.d(TAG, "コピーしたデータベースの検証に成功しました")
+                    Log.d(TAG, "コピーしたデータベースのサイズ: ${formatFileSize(outputFile.length())}")
                 } catch (e: Exception) {
                     Log.e(TAG, "コピーしたデータベースの検証に失敗しました: ${e.message}", e)
                     throw IOException("コピーしたデータベースの検証に失敗しました: ${e.message}")
