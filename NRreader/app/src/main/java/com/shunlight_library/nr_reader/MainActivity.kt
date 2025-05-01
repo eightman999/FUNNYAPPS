@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.Icons.AutoMirrored.Filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -770,9 +770,8 @@ fun NovelListScreen(
             Log.d("NovelListScreen", "外部DB有効状態: $isDbEnabled")
             val dbEnabled = settingsStore.dbEnabled.first()
             val dbUri = settingsStore.dbUri.first()
-            val copyToInternal = settingsStore.dbCopyToInternal.first()
 
-            Log.d("NovelListScreen", "DB設定: 有効=$dbEnabled, URI=$dbUri, コピー=$copyToInternal")
+            Log.d("NovelListScreen", "DB設定: 有効=$dbEnabled, URI=$dbUri")
 
             // 権限の確認
             val hasPermission = if (dbUri.isNotEmpty()) {

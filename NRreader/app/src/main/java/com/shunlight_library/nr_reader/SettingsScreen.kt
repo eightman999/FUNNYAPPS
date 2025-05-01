@@ -15,6 +15,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -116,7 +117,7 @@ fun SettingsScreen(
                 title = { Text("設定") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "戻る")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                     }
                 }
             )
@@ -153,7 +154,7 @@ fun SettingsScreen(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Font Family Setting
             SettingSection(title = "フォント") {
@@ -173,7 +174,7 @@ fun SettingsScreen(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Font Size Setting
             SettingSection(title = "フォントサイズ (${fontSize}sp)") {
@@ -196,7 +197,7 @@ fun SettingsScreen(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Background Color Setting
             SettingSection(title = "背景色") {
@@ -227,7 +228,7 @@ fun SettingsScreen(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Self-Server Access Setting
             SettingSection(title = "自己サーバーアクセス") {
@@ -246,7 +247,7 @@ fun SettingsScreen(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // Text Orientation Setting
             SettingSection(title = "テキスト表示の向き") {
@@ -268,7 +269,7 @@ fun SettingsScreen(
 
             // 自己サーバーアクセスがONの場合のみディレクトリ選択ボタンを表示
             if (selfServerAccess) {
-                Divider()
+                HorizontalDivider()
 
                 SettingSection(title = "自己サーバーのディレクトリ設定") {
                     // 選択されたパスがある場合は表示
