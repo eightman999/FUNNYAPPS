@@ -234,9 +234,14 @@ class ExternalDatabaseHandler(private val context: Context) {
 
             // データを取得する前にテーブル内のレコード数を確認
             val countQuery = "SELECT COUNT(*) FROM $novelTableName"
+            val LIMIT_ONE_QUERY = "SELECT * FROM $novelTableName LIMIT 1"
             Log.d(TAG, "レコード数確認クエリ: $countQuery")
+            Log.d(TAG, "LIMIT 1クエリ: $LIMIT_ONE_QUERY")
 
             val countCursor = copiedDb.rawQuery(countQuery, null)
+            val limit = copiedDb.rawQuery(LIMIT_ONE_QUERY, null)
+            Log.d(TAG, "LIMIT 1クエリ結果: ${limit.count} 件:内容: ${limit.columnNames.joinToString(",")}")
+
             var recordCount = 0
             countCursor.use {
                 if (it.moveToFirst()) {
@@ -264,6 +269,7 @@ class ExternalDatabaseHandler(private val context: Context) {
                 for (table in tablesList) {
                     if (table != novelTableName && !table.startsWith("sqlite_")) {
                         val tableCountCursor = copiedDb.rawQuery("SELECT COUNT(*) FROM $table", null)
+
                         tableCountCursor.use { cursor ->
                             if (cursor.moveToFirst()) {
                                 Log.d(TAG, "テーブル '$table' のレコード数: ${cursor.getInt(0)}")
