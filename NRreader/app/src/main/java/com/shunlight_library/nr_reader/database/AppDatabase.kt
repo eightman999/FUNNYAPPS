@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 // AppDatabase.kt の修正
 @Database(
     entities = [UnifiedNovelEntity::class],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

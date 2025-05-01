@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
         Index(name = "idx_novels_last_update", value = ["last_update_date"]),
         Index(
             name = "idx_novels_update_check",
-            value = ["ncode", "rating", "totalEpisodes", "generalAllNo", "lastUpdated"]
+            value = ["ncode", "rating", "total_episodes", "general_all_no", "last_updated"]
         )
     ]
 )
