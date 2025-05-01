@@ -34,7 +34,6 @@ class SettingsStore(private val context: Context) {
         // データベース関連の設定キー
         val DB_ENABLED = booleanPreferencesKey("db_enabled")
         val DB_URI = stringPreferencesKey("db_uri")
-        val DB_COPY_TO_INTERNAL = booleanPreferencesKey("db_copy_to_internal")
         val DB_LAST_SYNC = longPreferencesKey("db_last_sync")
     }
 
@@ -50,7 +49,6 @@ class SettingsStore(private val context: Context) {
     // データベース関連のデフォルト値
     val defaultDbEnabled = false
     val defaultDbUri = ""
-    val defaultDbCopyToInternal = false
     val defaultDbLastSync = 0L
 
     // テーマモード設定をFlowとして取得
@@ -158,17 +156,6 @@ class SettingsStore(private val context: Context) {
         }
 
     // 本体コピー設定をFlowとして取得
-    val dbCopyToInternal: Flow<Boolean> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[DB_COPY_TO_INTERNAL] ?: defaultDbCopyToInternal
-        }
 
     // 最終同期日時をFlowとして取得
     val dbLastSync: Flow<Long> = context.dataStore.data
@@ -238,15 +225,14 @@ class SettingsStore(private val context: Context) {
     }
 
     // データベース設定の保存
-    suspend fun saveDatabaseSettings(dbUri: String, copyToInternal: Boolean, isEnabled: Boolean) {
+    suspend fun saveDatabaseSettings(dbUri: String, isEnabled: Boolean) {
         try {
             context.dataStore.edit { preferences ->
                 preferences[DB_URI] = dbUri
-                preferences[DB_COPY_TO_INTERNAL] = true // 常に内部コピーを強制
                 preferences[DB_ENABLED] = isEnabled
                 preferences[DB_LAST_SYNC] = System.currentTimeMillis()
             }
-            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, コピー=true, 有効=$isEnabled")
+            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, 有効=$isEnabled")
         } catch (e: Exception) {
             Log.e("SettingsStore", "データベース設定の保存エラー: ${e.message}", e)
             throw e

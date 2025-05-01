@@ -66,4 +66,10 @@ interface UnifiedNovelDao {
         )
         insert(entity)
     }
+    @Transaction
+    suspend fun insertOrUpdateNovelsInBatch(novels: List<ExternalNovel>) {
+        novels.forEach { novel ->
+            insertOrUpdateNovel(novel)
+        }
+    }
 }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -128,11 +127,10 @@ fun DatabaseSettingsScreen(
                 )
 
                 Text(
-                    text = "小説情報を含むSQLiteデータベースファイルをアプリに取り込みます。" +
+                    text = "小説情報を含むSQLiteデータベースファイルをアプリに同期します。" +
                             "データベースのサイズによっては処理に時間がかかる場合があります。",
                     fontSize = 14.sp
                 )
-
                 Divider()
 
                 // 説明テキスト（本体コピーについて）
@@ -199,46 +197,41 @@ fun DatabaseSettingsScreen(
                         }
 
                         isCopying = true
-                        progressMessage = copyingMessage
+                        progressMessage = "データベースの同期を開始しています..."
 
                         scope.launch {
                             try {
-                                // DBコピー処理を実行
+                                // 引数からshouldCopyToInternalを削除
                                 val success = externalDbRepository.synchronizeWithExternalDatabase(
-                                    shouldCopyToInternal = true,
                                     externalDbUri = selectedDbUri!!
                                 )
 
                                 isCopying = false
 
                                 if (success) {
-                                    // コピー成功時にはメッセージを表示
                                     Toast.makeText(
                                         context,
-                                        "データベースのコピーが完了しました",
+                                        "データベースの同期が完了しました",
                                         Toast.LENGTH_SHORT
                                     ).show()
 
-                                    // 設定を保存
+                                    // copyToInternalパラメータを削除
                                     settingsStore.saveDatabaseSettings(
                                         dbUri = selectedDbUri.toString(),
-                                        copyToInternal = true,
                                         isEnabled = true
                                     )
 
-                                    // ホーム画面に戻る
                                     onBack()
                                 } else {
-                                    // エラーメッセージはリポジトリ側で設定される
                                     Toast.makeText(
                                         context,
-                                        "データベースのコピーに失敗しました",
+                                        "データベースの同期に失敗しました",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             } catch (e: Exception) {
                                 isCopying = false
-                                Log.e("DatabaseSettings", "コピー中にエラーが発生しました", e)
+                                Log.e("DatabaseSettings", "同期中にエラーが発生しました", e)
                                 Toast.makeText(
                                     context,
                                     "エラー: ${e.message}",
@@ -252,15 +245,15 @@ fun DatabaseSettingsScreen(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Text("データベースをコピーする")
+                    Text("データベースを同期する")
                 }
 
                 // 注意書き
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "注意: データベースのコピーには時間がかかる場合があります。大きなファイルの場合は特に処理に時間がかかります。",
+                    text = "データベースファイルは本体ストレージにコピーされ、アプリの内部データベースと同期されます。",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

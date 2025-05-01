@@ -29,19 +29,19 @@ class ExternalDatabaseRepository(
     private val _progressMessage = MutableStateFlow("")
     val progressMessage: Flow<String> = _progressMessage
 
-    suspend fun synchronizeWithExternalDatabase(shouldCopyToInternal: Boolean, externalDbUri: Uri): Boolean {
-        _progressMessage.value = "外部データベースへの接続を準備しています..."
+    // shouldCopyToInternal引数を削除（常にコピーするため）
+    suspend fun synchronizeWithExternalDatabase(externalDbUri: Uri): Boolean {
+        _progressMessage.value = "データベースの同期を準備しています..."
         _processedCount.set(0)
         _totalCount = 0
 
         try {
-            if (shouldCopyToInternal) {
-                _progressMessage.value = "データベースを内部ストレージにコピーしています..."
-                val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
-                if (!copySuccess) {
-                    _progressMessage.value = "データベースのコピーに失敗しました"
-                    return false
-                }
+            // 常に内部コピーを行う
+            _progressMessage.value = "データベースを内部ストレージにコピーしています..."
+            val copySuccess = dbHandler.copyExternalDatabaseToInternal(externalDbUri)
+            if (!copySuccess) {
+                _progressMessage.value = "データベースのコピーに失敗しました"
+                return false
             }
 
             val dbFile = context.getDatabasePath(ExternalDatabaseHandler.INTERNAL_DB_NAME)
@@ -51,25 +51,45 @@ class ExternalDatabaseRepository(
                 return false
             }
 
-            _progressMessage.value = "外部データベースからデータを読み込んでいます..."
-            val externalNovels: List<ExternalNovel> = dbHandler.getAllNovelsFromExternalDB()
+            // 名称変更したメソッドを呼び出し、メッセージも修正
+            _progressMessage.value = "コピーされたデータベースからデータを読み込んでいます..."
+            val externalNovels: List<ExternalNovel> = dbHandler.readNovelsFromCopiedDatabase()
             _totalCount = externalNovels.size
 
-            _progressMessage.value = "内部データベースにデータを同期しています... (0/${_totalCount})"
-            withContext(Dispatchers.IO) {
-                externalNovels.forEachIndexed { index, novel ->
-                    appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
-                    val processed = _processedCount.incrementAndGet()
+            _progressMessage.value = "アプリの内部データベースにデータを同期しています... (0/${_totalCount})"
 
-                    // 進捗メッセージを更新
-                    if (processed % 10 == 0 || processed == _totalCount) {
-                        _progressMessage.value = "内部データベースにデータを同期しています... ($processed/${_totalCount})"
+            // トランザクションを使用して一括処理
+            withContext(Dispatchers.IO) {
+                // AppDatabaseがrunInTransactionメソッドを持つ場合
+                appDatabase.runInTransaction {
+                    externalNovels.forEachIndexed { index, novel ->
+                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
+                        val processed = _processedCount.incrementAndGet()
+
+                        // 進捗メッセージを更新
+                        if (processed % 10 == 0 || processed == _totalCount) {
+                            _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
+                        }
                     }
                 }
+
+                // 代替案: Room 2.2.0以降では以下も可能
+                /*
+                appDatabase.withTransaction {
+                    externalNovels.forEachIndexed { index, novel ->
+                        appDatabase.UnifiedNovelDao().insertOrUpdateNovel(novel)
+                        val processed = _processedCount.incrementAndGet()
+
+                        if (processed % 10 == 0 || processed == _totalCount) {
+                            _progressMessage.value = "アプリの内部データベースにデータを同期しています... ($processed/${_totalCount})"
+                        }
+                    }
+                }
+                */
             }
 
             _progressMessage.value = "データベースの同期が完了しました"
-            Log.d(TAG, "データベース同期完了: ${externalNovels.size}件の小説を同期")
+            Log.d(TAG, "アプリの内部データベースへの同期完了: ${externalNovels.size}件の小説を同期")
             return true
 
         } catch (e: Exception) {
