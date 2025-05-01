@@ -19,17 +19,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import com.shunlight_library.nr_reader.database.ExternalDatabaseHandler
-import com.shunlight_library.nr_reader.repository.ExternalDatabaseRepository
-import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
 import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 
 /**
- * データベース設定画面コンポーネント
+ * データベースコピー設定画面コンポーネント
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,22 +37,15 @@ fun DatabaseSettingsScreen(
     val scope = rememberCoroutineScope()
 
     // 外部データベースハンドラーとリポジトリ
-    val dbHandler = remember { ExternalDatabaseHandler(context) }
-    val externalDbRepository = remember {
-        ExternalDatabaseRepository(
-            context,
-            application.database,
-            dbHandler
-        )
-    }
+    val dbHandler = remember { application.externalDbHandler }
+    val externalDbRepository = remember { application.externalDbRepository }
 
     // 設定状態
-    val copyToInternal = true // 常に内部にコピーする設定
     var selectedDbUri by remember { mutableStateOf<Uri?>(null) }
     var dbFilePath by remember { mutableStateOf("") }
 
     // 進行状況
-    var isSyncing by remember { mutableStateOf(false) }
+    var isCopying by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0f) }
     var progressMessage by remember { mutableStateOf("") }
     var processedCount by remember { mutableStateOf(0) }
@@ -64,7 +53,7 @@ fun DatabaseSettingsScreen(
 
     // 複数回表示するメッセージを定義
     val noFileSelectedMessage = "データベースファイルが選択されていません"
-    val synchronizingMessage = "データベースを同期しています..."
+    val copyingMessage = "データベースをコピーしています..."
 
     // 設定から現在の状態を読み込む
     val settingsStore = remember { SettingsStore(context) }
@@ -110,7 +99,7 @@ fun DatabaseSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("データベース設定") },
+                title = { Text("データベースコピー設定") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -133,13 +122,13 @@ fun DatabaseSettingsScreen(
             ) {
                 // 説明テキスト
                 Text(
-                    text = "外部データベースファイルを読み込み",
+                    text = "外部データベースファイルのコピー",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
 
                 Text(
-                    text = "小説情報を含むSQLiteデータベースファイルを読み込んでアプリに同期します。" +
+                    text = "小説情報を含むSQLiteデータベースファイルをアプリに取り込みます。" +
                             "データベースのサイズによっては処理に時間がかかる場合があります。",
                     fontSize = 14.sp
                 )
@@ -148,7 +137,7 @@ fun DatabaseSettingsScreen(
 
                 // 説明テキスト（本体コピーについて）
                 Text(
-                    text = "データベースファイルは常に本体ストレージにコピーされます。これによりSDカードが取り外されても使用できるようになります。",
+                    text = "データベースファイルは本体ストレージにコピーされます。これによりSDカードが取り外されても使用できるようになります。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -201,7 +190,7 @@ fun DatabaseSettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // DB読み込みボタン
+                // DBコピーボタン
                 Button(
                     onClick = {
                         if (selectedDbUri == null) {
@@ -209,31 +198,31 @@ fun DatabaseSettingsScreen(
                             return@Button
                         }
 
-                        isSyncing = true
-                        progressMessage = synchronizingMessage
+                        isCopying = true
+                        progressMessage = copyingMessage
 
                         scope.launch {
                             try {
-                                // DBとの同期処理を実行（常に内部コピー）
+                                // DBコピー処理を実行
                                 val success = externalDbRepository.synchronizeWithExternalDatabase(
-                                    shouldCopyToInternal = true, // 常に内部コピー
+                                    shouldCopyToInternal = true,
                                     externalDbUri = selectedDbUri!!
                                 )
 
-                                isSyncing = false
+                                isCopying = false
 
                                 if (success) {
-                                    // 同期成功時にはメッセージを表示
+                                    // コピー成功時にはメッセージを表示
                                     Toast.makeText(
                                         context,
-                                        "データベースの同期が完了しました",
+                                        "データベースのコピーが完了しました",
                                         Toast.LENGTH_SHORT
                                     ).show()
 
-                                    // 設定を保存（常に内部コピー）
+                                    // 設定を保存
                                     settingsStore.saveDatabaseSettings(
                                         dbUri = selectedDbUri.toString(),
-                                        copyToInternal = true, // 常に内部コピー
+                                        copyToInternal = true,
                                         isEnabled = true
                                     )
 
@@ -243,13 +232,13 @@ fun DatabaseSettingsScreen(
                                     // エラーメッセージはリポジトリ側で設定される
                                     Toast.makeText(
                                         context,
-                                        "データベースの同期に失敗しました",
+                                        "データベースのコピーに失敗しました",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             } catch (e: Exception) {
-                                isSyncing = false
-                                Log.e("DatabaseSettings", "同期中にエラーが発生しました", e)
+                                isCopying = false
+                                Log.e("DatabaseSettings", "コピー中にエラーが発生しました", e)
                                 Toast.makeText(
                                     context,
                                     "エラー: ${e.message}",
@@ -263,20 +252,20 @@ fun DatabaseSettingsScreen(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Text("データベースを読み込む")
+                    Text("データベースをコピーする")
                 }
 
                 // 注意書き
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "注意: データベースの読み込みには時間がかかる場合があります。大きなファイルの場合は特に処理に時間がかかります。",
+                    text = "注意: データベースのコピーには時間がかかる場合があります。大きなファイルの場合は特に処理に時間がかかります。",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
-            // 同期中のローディング表示
-            if (isSyncing) {
+            // コピー中のローディング表示
+            if (isCopying) {
                 LoadingDialog(
                     message = progressMessage,
                     progress = progress,

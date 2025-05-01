@@ -1,25 +1,17 @@
 package com.shunlight_library.nr_reader.database
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.util.Log
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
-import androidx.sqlite.db.SupportSQLiteDatabase
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.*
 
 /**
  * 外部DBファイルハンドラー
- * 外部のSQLiteデータベースファイルを読み込む機能を提供します
+ * 外部のSQLiteデータベースファイルをコピーする機能を提供します
  */
 class ExternalDatabaseHandler(private val context: Context) {
 
@@ -37,15 +29,8 @@ class ExternalDatabaseHandler(private val context: Context) {
         private const val TAG = "ExternalDatabaseHandler"
         const val INTERNAL_DB_NAME = "external_novels_database.db"
 
-        // シングルトンインスタンス
-        @Volatile
-        private var INSTANCE: ExternalNovelsDatabase? = null
-
-        // 外部DBファイルをコピー中かどうかのフラグ
+        // コピー中かどうかのフラグ
         private var isCopying = false
-
-        // 外部DBファイルのURI
-        private var externalDbUri: Uri? = null
     }
 
     /**
@@ -133,9 +118,6 @@ class ExternalDatabaseHandler(private val context: Context) {
                 _progressFlow.value = 1f
                 _progressMessage.value = "コピー完了 (${formatFileSize(_processedBytes)})"
 
-                // コピーに成功したら、内部DBのURIを設定
-                externalDbUri = Uri.fromFile(outputFile)
-
                 // ファイルが実際に存在するか確認
                 if (!outputFile.exists()) {
                     Log.e(TAG, "コピー後にファイルが存在しません: ${outputFile.absolutePath}")
@@ -154,21 +136,7 @@ class ExternalDatabaseHandler(private val context: Context) {
                     throw IOException("データベースファイルに読み取り権限がありません")
                 }
 
-                // コピーしたデータベースを検証（SQLiteデータベースとして開けるか確認）
-                try {
-                    val testDb = SQLiteDatabase.openDatabase(
-                        outputFile.absolutePath,
-                        null,
-                        SQLiteDatabase.OPEN_READONLY
-                    )
-                    testDb.close()
-                    Log.d(TAG, "コピーしたデータベースの検証に成功しました")
-                    Log.d(TAG, "コピーしたデータベースのサイズ: ${formatFileSize(outputFile.length())}")
-                } catch (e: Exception) {
-                    Log.e(TAG, "コピーしたデータベースの検証に失敗しました: ${e.message}", e)
-                    throw IOException("コピーしたデータベースの検証に失敗しました: ${e.message}")
-                }
-
+                Log.d(TAG, "コピーしたデータベースのサイズ: ${formatFileSize(outputFile.length())}")
                 true
             }
         } catch (e: Exception) {
@@ -177,74 +145,6 @@ class ExternalDatabaseHandler(private val context: Context) {
             false
         } finally {
             isCopying = false
-        }
-    }
-
-    /**
-     * SAF (Storage Access Framework) 経由で外部DBにアクセスするための設定
-     * @param uri 外部DBファイルのURI
-     */
-    fun setExternalDatabaseUri(uri: Uri) {
-        Log.d(TAG, "外部データベースURIを設定: $uri")
-        externalDbUri = uri
-
-        // 既存のデータベース接続をクローズ
-        closeDatabase()
-    }
-
-    /**
-     * 外部DBへのアクセスを閉じる
-     */
-    fun closeDatabase() {
-        Log.d(TAG, "データベース接続をクローズします")
-        INSTANCE?.let {
-            if (it.isOpen) {
-                it.close()
-            }
-            INSTANCE = null
-        }
-    }
-
-    /**
-     * 外部DBインスタンスを取得
-     * @return 外部DBインスタンス
-     */
-    // ExternalDatabaseHandler.kt の getDatabase メソッドを修正
-    fun getDatabase(): ExternalNovelsDatabase? {
-        if (externalDbUri == null) {
-            Log.e(TAG, "外部データベースURIが設定されていません")
-            return null
-        }
-
-        Log.d(TAG, "データベースインスタンスを取得します: $externalDbUri")
-
-        return INSTANCE ?: synchronized(this) {
-            try {
-                // まず内部DBファイルが存在するか確認
-                val dbFile = context.getDatabasePath(INTERNAL_DB_NAME)
-
-                // 既存のコードでは .createFromFile を使用していますが、
-                // これが問題の原因である可能性が高いため、通常の方法でDBをオープン
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    ExternalNovelsDatabase::class.java,
-                    INTERNAL_DB_NAME
-                )
-                    .addCallback(object : RoomDatabase.Callback() {
-                        override fun onOpen(db: SupportSQLiteDatabase) {
-                            super.onOpen(db)
-                            Log.d(TAG, "データベースを開きました: ${dbFile.absolutePath}")
-                        }
-                    })
-                    .fallbackToDestructiveMigration()
-                    .build()
-
-                INSTANCE = instance
-                instance
-            } catch (e: Exception) {
-                Log.e(TAG, "データベースのオープン中にエラーが発生しました: ${e.message}", e)
-                null
-            }
         }
     }
 
@@ -259,42 +159,4 @@ class ExternalDatabaseHandler(private val context: Context) {
             else -> "${size / (1024 * 1024 * 1024)} GB"
         }
     }
-
-    /**
-     * 外部DBが設定されているかどうかを確認
-     */
-    fun hasExternalDatabase(): Boolean {
-        return externalDbUri != null
-    }
-
-    /**
-     * 外部DBのURIを取得
-     */
-    fun getExternalDatabaseUri(): Uri? {
-        return externalDbUri
-    }
-}
-
-/**
- * 外部小説データベース定義
- */
-@Database(
-    entities = [
-        ExternalNovelEntity::class,
-        EpisodeEntity::class,
-        LastReadNovelEntity::class
-    ],
-    version = 1,
-    exportSchema = false
-)
-abstract class ExternalNovelsDatabase : RoomDatabase() {
-    abstract fun externalNovelDao(): ExternalNovelDao
-
-    // データベースが開いているかどうかを確認
-    override val isOpen: Boolean
-        get() = try {
-            openHelper.writableDatabase.isOpen
-        } catch (e: Exception) {
-            false
-        }
 }
