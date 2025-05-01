@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 /**
  * データベースコピー設定画面コンポーネント
@@ -102,7 +102,7 @@ fun DatabaseSettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "戻る"
                         )
                     }
