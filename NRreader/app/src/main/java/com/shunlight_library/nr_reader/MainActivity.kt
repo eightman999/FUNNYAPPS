@@ -766,7 +766,7 @@ fun NovelListScreen(
     // 外部DB使用モードかどうかを確認
     LaunchedEffect(key1 = Unit) {
         try {
-            isDbEnabled = settingsStore.isDatabaseEnabled()
+            isDbEnabled = false;
             Log.d("NovelListScreen", "外部DB有効状態: $isDbEnabled")
             val dbEnabled = settingsStore.dbEnabled.first()
             val dbUri = settingsStore.dbUri.first()
