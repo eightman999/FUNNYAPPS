@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 
+import androidx.activity.compose.BackHandler
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebViewScreen(
@@ -27,6 +29,14 @@ fun WebViewScreen(
     var canGoForward by remember { mutableStateOf(false) }
     var currentLoadingUrl by remember { mutableStateOf("") }
 
+    // WebView内の履歴を戻るか、メイン画面に戻るかを判断
+    BackHandler {
+        if (canGoBack) {
+            webView?.goBack()
+        } else {
+            onBack()
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -48,33 +58,7 @@ fun WebViewScreen(
                 }
             )
         },
-        bottomBar = {
-            BottomAppBar {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            if (canGoBack) webView?.goBack()
-                        },
-                        enabled = canGoBack
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "前のページ")
-                    }
 
-                    IconButton(
-                        onClick = {
-                            if (canGoForward) webView?.goForward()
-                        },
-                        enabled = canGoForward
-                    ) {
-                        Icon(Icons.Default.ArrowForward, contentDescription = "次のページ")
-                    }
-                }
-            }
-        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -94,7 +78,7 @@ fun WebViewScreen(
                                 super.onPageFinished(view, loadedUrl)
                                 canGoBack = view.canGoBack()
                                 canGoForward = view.canGoForward()
-                                currentLoadingUrl = loadedUrl
+                                currentLoadingUrl = loadedUrl // 現在のURLを更新
                             }
                         }
                         settings.javaScriptEnabled = true
@@ -107,8 +91,8 @@ fun WebViewScreen(
                     }
                 },
                 update = { view ->
-                    // URL変更時にWebViewを更新
-                    if (currentLoadingUrl != url) {
+                    // 初期URLが変更された場合のみloadUrlを呼び出す
+                    if (currentLoadingUrl.isEmpty() || currentLoadingUrl == url) {
                         view.loadUrl(url)
                         currentLoadingUrl = url
                     }

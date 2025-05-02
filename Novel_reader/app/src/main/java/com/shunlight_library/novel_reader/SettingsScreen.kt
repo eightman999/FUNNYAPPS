@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.activity.compose.BackHandler
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,6 +110,9 @@ fun SettingsScreen(
             }
         }
     }
+
+
+
     if (showDBWriteDialog && selectedUri != null) {
         AlertDialog(
             onDismissRequest = {
@@ -144,6 +148,14 @@ fun SettingsScreen(
                 }
             }
         )
+        BackHandler {
+            showDBWriteDialog = false
+        }
+    }else {
+        // ダイアログが表示されていない場合は戻るボタンでメイン画面に戻る
+        BackHandler {
+            onBack()
+        }
     }
     // Background color options
     val backgroundOptions = listOf("White", "Cream", "Light Gray", "Light Blue")

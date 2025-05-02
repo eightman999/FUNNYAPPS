@@ -3,6 +3,7 @@ package com.shunlight_library.novel_reader
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.ui.theme.Novel_readerTheme
 import com.shunlight_library.novel_reader.ui.theme.LightOrange
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -135,6 +137,9 @@ fun NovelReaderApp() {
                 }
             }
         )
+        BackHandler {
+            showR18Dialog = false
+        }
     }
 
     when {
@@ -382,6 +387,9 @@ fun NovelReaderApp() {
                         }
                     }
                 }
+            }
+            BackHandler {
+                Log.d("NovelReaderApp", "Back button pressed")
             }
         }
     }
