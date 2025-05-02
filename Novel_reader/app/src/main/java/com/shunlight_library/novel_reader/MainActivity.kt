@@ -58,16 +58,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NovelReaderApp() {
     var showSettings by remember { mutableStateOf(false) }
+    // WebView用の状態変数を追加
+    var showWebView by remember { mutableStateOf(false) }
+    var currentUrl by remember { mutableStateOf("") }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // R18コンテンツ用のダイアログ表示状態
     var showR18Dialog by remember { mutableStateOf(false) }
 
-    // URLを開くヘルパー関数
+    // URLを開くヘルパー関数を修正
     fun openUrl(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        context.startActivity(intent)
+        currentUrl = url
+        showWebView = true
     }
 
     // リポジトリを取得
@@ -134,239 +137,249 @@ fun NovelReaderApp() {
         )
     }
 
-    // 設定画面の表示
-    if (showSettings) {
-        SettingsScreen(onBack = { showSettings = false })
-    } else {
-        // メイン画面
-        Scaffold { innerPadding ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                // 新着・更新情報セクション
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(LightOrange)
-                            .padding(8.dp)
-                    ) {
-                        Text(
-                            text = "新着・更新情報",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+    when {
+        showWebView -> {
+            WebViewScreen(
+                url = currentUrl,
+                onBack = { showWebView = false }
+            )
+        }
 
-                        // 新着・更新情報をボタンに変更
-                        Button(
-                            onClick = { /* TODO: 新着・更新情報画面に遷移 */ },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = LightOrange
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+        showSettings -> {
+            SettingsScreen(onBack = { showSettings = false })
+        }
+
+        else -> {
+            // メイン画面（既存のコード）
+            Scaffold { innerPadding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    // 新着・更新情報セクション
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(LightOrange)
+                                .padding(8.dp)
                         ) {
                             Text(
-                                text = "新着1件・更新あり0件",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "新着・更新情報",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal
                             )
-                        }
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = "最後に開いていた小説",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                            // 新着・更新情報をボタンに変更
+                            Button(
+                                onClick = { /* TODO: 新着・更新情報画面に遷移 */ },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = LightOrange
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "新着1件・更新あり0件",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                        // 最後に読んだ小説の情報をボタンに変更
-                        Button(
-                            onClick = { /* TODO: 最後に読んだ小説の続きを開く */ },
-                            enabled = novelInfo != null, // 小説情報がある場合のみ有効化
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = if (novelInfo != null) LightOrange else Color.Gray,
-                                disabledContainerColor = Color.LightGray,
-                                disabledContentColor = Color.DarkGray
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                            Spacer(modifier = Modifier.height(14.dp))
                             Text(
-                                text = if (novelInfo != null)
-                                    "${novelInfo!!.title} ${lastReadNovel!!.episode_no}話"
-                                else
-                                    "まだ小説を読んでいません",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "最後に開いていた小説",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // 最後に読んだ小説の情報をボタンに変更
+                            Button(
+                                onClick = { /* TODO: 最後に読んだ小説の続きを開く */ },
+                                enabled = novelInfo != null, // 小説情報がある場合のみ有効化
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = if (novelInfo != null) LightOrange else Color.Gray,
+                                    disabledContainerColor = Color.LightGray,
+                                    disabledContentColor = Color.DarkGray
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = if (novelInfo != null)
+                                        "${novelInfo!!.title} ${lastReadNovel!!.episode_no}話"
+                                    else
+                                        "まだ小説を読んでいません",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                        }
+                    }
+
+                    // 小説をさがすセクション
+                    item {
+                        SectionHeader(title = "小説をさがす")
+                    }
+
+                    // ランキングとPickup
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = "⚪",
+                                text = "ランキング",
+                                onClick = { openUrl("https://yomou.syosetu.com/rank/top/") }
+                            )
+                            MenuButton(
+                                icon = "📢",
+                                text = "PickUp!",
+                                onClick = { openUrl("https://syosetu.com/pickup/list/") }
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(14.dp))
                     }
-                }
 
-                // 小説をさがすセクション
-                item {
-                    SectionHeader(title = "小説をさがす")
-                }
-
-                // ランキングとPickup
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = "⚪",
-                            text = "ランキング",
-                            onClick = { openUrl("https://yomou.syosetu.com/rank/top/") }
-                        )
-                        MenuButton(
-                            icon = "📢",
-                            text = "PickUp!",
-                            onClick = { openUrl("https://syosetu.com/pickup/list/") }
-                        )
+                    // キーワード検索と詳細検索
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = "🔍",
+                                text = "キーワード",
+                                onClick = { openUrl("https://yomou.syosetu.com/search/keyword/") }
+                            )
+                            MenuButton(
+                                icon = ">",
+                                text = "詳細検索",
+                                onClick = { openUrl("https://yomou.syosetu.com/search.php") }
+                            )
+                        }
                     }
-                }
+                    //カクヨム＆R18セクション
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = ">",
+                                text = "カクヨム",
+                                onClick = { openUrl("https://kakuyomu.jp/") }
+                            )
 
-                // キーワード検索と詳細検索
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = "🔍",
-                            text = "キーワード",
-                            onClick = { openUrl("https://yomou.syosetu.com/search/keyword/") }
-                        )
-                        MenuButton(
-                            icon = ">",
-                            text = "詳細検索",
-                            onClick = { openUrl("https://yomou.syosetu.com/search.php") }
-                        )
+                            MenuButton(
+                                icon = "<",
+                                text = "R18",
+                                onClick = { showR18Dialog = true }
+                            )
+                        }
                     }
-                }
-                //カクヨム＆R18セクション
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = ">",
-                            text = "カクヨム",
-                            onClick = { openUrl("https://kakuyomu.jp/") }
-                        )
 
-                        MenuButton(
-                            icon = "<",
-                            text = "R18",
-                            onClick = { showR18Dialog = true }
-                        )
+                    // 小説を読むセクション
+                    item {
+                        SectionHeader(title = "小説を読む")
                     }
-                }
 
-                // 小説を読むセクション
-                item {
-                    SectionHeader(title = "小説を読む")
-                }
-
-                // 小説一覧と最近更新された小説
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = "📚",
-                            text = "小説一覧",
-                            onClick = {}
-                        )
-                        MenuButton(
-                            icon = ">",
-                            text = "最近更新された小説",
-                            onClick = {}
-                        )
+                    // 小説一覧と最近更新された小説
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = "📚",
+                                text = "小説一覧",
+                                onClick = {}
+                            )
+                            MenuButton(
+                                icon = ">",
+                                text = "最近更新された小説",
+                                onClick = {}
+                            )
+                        }
                     }
-                }
 
-                // 最近読んだ小説と作者別・シリーズ別
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = ">",
-                            text = "最近読んだ小説",
-                            onClick = {}
-                        )
-                        MenuButton(
-                            icon = ">",
-                            text = "作者別\nシリーズ別",
-                            onClick = {}
-                        )
+                    // 最近読んだ小説と作者別・シリーズ別
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = ">",
+                                text = "最近読んだ小説",
+                                onClick = {}
+                            )
+                            MenuButton(
+                                icon = ">",
+                                text = "作者別\nシリーズ別",
+                                onClick = {}
+                            )
+                        }
                     }
-                }
 
-                // タグ検索
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        MenuButton(
-                            icon = ">",
-                            text = "タグ検索",
-                            onClick = {},
-                            modifier = Modifier.width(180.dp)
-                        )
+                    // タグ検索
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            MenuButton(
+                                icon = ">",
+                                text = "タグ検索",
+                                onClick = {},
+                                modifier = Modifier.width(180.dp)
+                            )
+                        }
                     }
-                }
 
-                // オプションセクション
-                item {
-                    SectionHeader(title = "オプション")
-                }
+                    // オプションセクション
+                    item {
+                        SectionHeader(title = "オプション")
+                    }
 
-                // ダウンロード状況と設定
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        MenuButton(
-                            icon = "⬇",
-                            text = "ダウンロード状況",
-                            onClick = {}
-                        )
-                        MenuButton(
-                            icon = "⚙",
-                            text = "設定",
-                            onClick = { showSettings = true }
-                        )
+                    // ダウンロード状況と設定
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            MenuButton(
+                                icon = "⬇",
+                                text = "ダウンロード状況",
+                                onClick = {}
+                            )
+                            MenuButton(
+                                icon = "⚙",
+                                text = "設定",
+                                onClick = { showSettings = true }
+                            )
+                        }
                     }
                 }
             }
