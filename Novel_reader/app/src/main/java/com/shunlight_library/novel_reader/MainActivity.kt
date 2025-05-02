@@ -1,5 +1,7 @@
 package com.shunlight_library.novel_reader
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -53,11 +55,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-// MainActivityの表示を更新
 @Composable
 fun NovelReaderApp() {
     var showSettings by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // R18コンテンツ用のダイアログ表示状態
+    var showR18Dialog by remember { mutableStateOf(false) }
+
+    // URLを開くヘルパー関数
+    fun openUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        context.startActivity(intent)
+    }
 
     // リポジトリを取得
     val repository = NovelReaderApplication.getRepository()
@@ -71,6 +82,56 @@ fun NovelReaderApp() {
         if (lastReadNovel != null) {
             novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
         }
+    }
+
+    // R18コンテンツ選択ダイアログ
+    if (showR18Dialog) {
+        AlertDialog(
+            onDismissRequest = { showR18Dialog = false },
+            title = { Text("R18コンテンツを選択") },
+            text = { Text("閲覧したいR18サイトを選択してください") },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.padding(top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            openUrl("https://noc.syosetu.com/top/top/")
+                            showR18Dialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("ノクターン")
+                    }
+
+                    Button(
+                        onClick = {
+                            openUrl("https://mid.syosetu.com/top/top/")
+                            showR18Dialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("ミッドナイト")
+                    }
+
+                    Button(
+                        onClick = {
+                            openUrl("https://mnlt.syosetu.com/top/top/")
+                            showR18Dialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("ムーンライト")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showR18Dialog = false }) {
+                    Text("キャンセル")
+                }
+            }
+        )
     }
 
     // 設定画面の表示
@@ -167,12 +228,12 @@ fun NovelReaderApp() {
                         MenuButton(
                             icon = "⚪",
                             text = "ランキング",
-                            onClick = {}
+                            onClick = { openUrl("https://yomou.syosetu.com/rank/top/") }
                         )
                         MenuButton(
                             icon = "📢",
                             text = "PickUp!",
-                            onClick = {}
+                            onClick = { openUrl("https://syosetu.com/pickup/list/") }
                         )
                     }
                 }
@@ -188,12 +249,12 @@ fun NovelReaderApp() {
                         MenuButton(
                             icon = "🔍",
                             text = "キーワード",
-                            onClick = {}
+                            onClick = { openUrl("https://yomou.syosetu.com/search/keyword/") }
                         )
                         MenuButton(
                             icon = ">",
                             text = "詳細検索",
-                            onClick = {}
+                            onClick = { openUrl("https://yomou.syosetu.com/search.php") }
                         )
                     }
                 }
@@ -208,13 +269,13 @@ fun NovelReaderApp() {
                         MenuButton(
                             icon = ">",
                             text = "カクヨム",
-                            onClick = {}
+                            onClick = { openUrl("https://kakuyomu.jp/") }
                         )
 
                         MenuButton(
                             icon = "<",
                             text = "R18",
-                            onClick = {}
+                            onClick = { showR18Dialog = true }
                         )
                     }
                 }
