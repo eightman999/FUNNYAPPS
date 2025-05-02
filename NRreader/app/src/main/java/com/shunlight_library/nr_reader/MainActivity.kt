@@ -1,11 +1,4 @@
-//@antml:function_calls>
-//<invoke name="artifacts">
-//<parameter name="command">create</parameter>
-//<parameter name="id">modified-main-activity</parameter>
-//<parameter name="type">application/vnd.ant.code</parameter>
-//<parameter name="language">kotlin</parameter>
-//<parameter name="title">MainActivity.kt (修正後)</parameter>
-//<parameter name="content">package com.shunlight_library.nr_reader
+
 
 import android.content.Context
 import android.net.Uri
