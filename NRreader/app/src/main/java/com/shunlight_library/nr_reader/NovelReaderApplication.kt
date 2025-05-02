@@ -10,9 +10,11 @@ class NovelReaderApplication : Application() {
     // アプリケーションスコープのコルーチン
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-
     // 設定ストア
-    private val settingsStore by lazy { SettingsStore(this) }
+    val settingsStore by lazy { SettingsStore(this) }
+
+    // 小説リポジトリ
+    val repository by lazy { NovelRepository(this) }
 
     // タグ（ログ用）
     private val TAG = "NovelReaderApp"

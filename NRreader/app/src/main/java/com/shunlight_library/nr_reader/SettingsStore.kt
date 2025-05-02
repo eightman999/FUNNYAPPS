@@ -1,3 +1,4 @@
+// DB関連のメソッドとフィールドを削除
 package com.shunlight_library.nr_reader
 
 import android.content.Context
@@ -30,7 +31,6 @@ class SettingsStore(private val context: Context) {
         val SELF_SERVER_ACCESS = booleanPreferencesKey("self_server_access")
         val TEXT_ORIENTATION = stringPreferencesKey("text_orientation")
         val SELF_SERVER_PATH_KEY = stringPreferencesKey("self_server_path")
-
     }
 
     // デフォルト値の定義
@@ -120,50 +120,6 @@ class SettingsStore(private val context: Context) {
             preferences[TEXT_ORIENTATION] ?: defaultTextOrientation
         }
 
-
-
-    // テーマモード設定の保存
-    suspend fun saveThemeMode(mode: String) {
-        context.dataStore.edit { preferences ->
-            preferences[THEME_MODE] = mode
-        }
-    }
-
-    // フォントファミリー設定の保存
-    suspend fun saveFontFamily(family: String) {
-        context.dataStore.edit { preferences ->
-            preferences[FONT_FAMILY] = family
-        }
-    }
-
-    // フォントサイズ設定の保存
-    suspend fun saveFontSize(size: Int) {
-        context.dataStore.edit { preferences ->
-            preferences[FONT_SIZE] = size
-        }
-    }
-
-    // 背景色設定の保存
-    suspend fun saveBackgroundColor(color: String) {
-        context.dataStore.edit { preferences ->
-            preferences[BACKGROUND_COLOR] = color
-        }
-    }
-
-    // 自己サーバーアクセス設定の保存
-    suspend fun saveSelfServerAccess(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[SELF_SERVER_ACCESS] = enabled
-        }
-    }
-
-    // テキスト表示方向設定の保存
-    suspend fun saveTextOrientation(orientation: String) {
-        context.dataStore.edit { preferences ->
-            preferences[TEXT_ORIENTATION] = orientation
-        }
-    }
-
     // 自己サーバーパス設定を取得
     val selfServerPath = context.dataStore.data.map { preferences ->
         preferences[SELF_SERVER_PATH_KEY] ?: ""
@@ -175,9 +131,6 @@ class SettingsStore(private val context: Context) {
             preferences[SELF_SERVER_PATH_KEY] = path
         }
     }
-
-
-
 
     // 永続的なアクセス権限を持つURIを取得
     fun getPersistedUriPermissions(): List<Uri> {

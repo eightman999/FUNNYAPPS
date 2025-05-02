@@ -1,4 +1,11 @@
-package com.shunlight_library.nr_reader
+//@antml:function_calls>
+//<invoke name="artifacts">
+//<parameter name="command">create</parameter>
+//<parameter name="id">modified-main-activity</parameter>
+//<parameter name="type">application/vnd.ant.code</parameter>
+//<parameter name="language">kotlin</parameter>
+//<parameter name="title">MainActivity.kt (修正後)</parameter>
+//<parameter name="content">package com.shunlight_library.nr_reader
 
 import android.net.Uri
 import android.os.Bundle
@@ -82,7 +89,6 @@ fun NovelReaderApp() {
     val lightBlue = Color(0xFF80C8FF)
     var showWebView by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var showDatabaseSettings by remember { mutableStateOf(false) }
     var showNovelList by remember { mutableStateOf(false) }
     var currentTitle by remember { mutableStateOf("") }
     var currentUrl by remember { mutableStateOf("") }
@@ -90,7 +96,6 @@ fun NovelReaderApp() {
 
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context) }
-    val application = context.applicationContext as NovelReaderApplication
     val scope = rememberCoroutineScope()
     val parser = remember { NovelParser(context) }
 
@@ -98,7 +103,6 @@ fun NovelReaderApp() {
     var selfServerPath by remember { mutableStateOf("") }
     var selfServerAccess by remember { mutableStateOf(false) }
     var hasValidPermission by remember { mutableStateOf(false) }
-    var dbEnabled by remember { mutableStateOf(false) }
     var lastReadNovel by remember { mutableStateOf<Novel?>(null) }
     var newNovelCount by remember { mutableStateOf(0) }
     var updatedNovelCount by remember { mutableStateOf(0) }
@@ -139,11 +143,10 @@ fun NovelReaderApp() {
             // 現在の設定値を取得
             selfServerAccess = settingsStore.selfServerAccess.first()
             selfServerPath = settingsStore.selfServerPath.first()
-            dbEnabled = settingsStore.dbEnabled.first()
 
             // 読み込み確認用ログ
             Log.d("NovelReaderApp", "設定読み込み: selfServerAccess=$selfServerAccess, " +
-                    "selfServerPath=$selfServerPath, dbEnabled=$dbEnabled")
+                    "selfServerPath=$selfServerPath")
 
             // 保存されている権限の有効性を確認
             if (selfServerPath.isNotEmpty()) {
@@ -208,14 +211,6 @@ fun NovelReaderApp() {
     if (showSettings) {
         SettingsScreen(onBack = { showSettings = false })
     }
-    // DB設定画面の表示
-    else if (showDatabaseSettings) {
-        DatabaseSettingsScreen(onBack = {
-            showDatabaseSettings = false
-            // 設定が変更された可能性があるので情報を再読み込み
-            loadLastReadAndUpdatedInfo()
-        })
-    }
     // 小説一覧の表示
     else if (showNovelList) {
         NovelListScreen(
@@ -267,27 +262,6 @@ fun NovelReaderApp() {
     // WebViewの表示
     else if (showWebView) {
         var currentNovel by remember { mutableStateOf<Novel?>(null) }
-
-        // URLからnovelを検索する関数
-        LaunchedEffect(key1 = currentUrl) {
-            // 小説を表示する場合は、novelオブジェクトを取得
-            if (currentUrl.contains("/novels/") && currentUrl.contains("/episode_")) {
-                // URLからncodeを抽出
-                val ncodeRegex = "/novels/([^/]+)/".toRegex()
-                val ncodeMatch = ncodeRegex.find(currentUrl)
-                val ncode = ncodeMatch?.groupValues?.get(1) ?: ""
-
-                if (ncode.isNotEmpty()) {
-                    // リポジトリから該当する小説情報を取得
-                    val application = context.applicationContext as NovelReaderApplication
-                    val repository = application.repository
-                    repository.getAllNovels().collect { allNovels ->
-                        currentNovel = allNovels.find { it.ncode == ncode }
-                        // この処理は直接returnで終了できないので、関数が終了するまで実行される
-                    }
-                }
-            }
-        }
 
         Scaffold(
             topBar = {
@@ -503,14 +477,8 @@ fun NovelReaderApp() {
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    NavButton(
-                        title = "DB読み込み",
-                        icon = "🗃️",
-                        onClick = {
-                            showDatabaseSettings = true
-                        }
-                    )
                     NavButton(title = "ダウンロード状況", icon = "⬇")
+                    Spacer(modifier = Modifier.width(160.dp))
                 }
 
                 Row(
@@ -537,10 +505,9 @@ fun NovelReaderApp() {
 @Composable
 fun WebViewScreen(url: String, novel: Novel? = null) {
     val context = LocalContext.current
-    val application = context.applicationContext as NovelReaderApplication
-    val repository = application.repository
     val scope = rememberCoroutineScope()
     val settingsStore = remember { SettingsStore(context) }
+    val repository = remember { NovelRepository(context) }
 
     // 設定情報を取得
     var selfServerPath by remember { mutableStateOf("") }
@@ -665,10 +632,17 @@ fun WebViewScreen(url: String, novel: Novel? = null) {
                         if (novel != null && novel.ncode.isNotEmpty()) {
                             // エピソード番号を抽出して保存
                             val episodeNum = extractEpisodeNumber(url)
-                            scope.launch {
-                                repository.updateLastReadEpisode(novel.ncode, episodeNum)
-                                Log.d("WebViewScreen", "最後に読んだエピソードを更新: ${novel.ncode} - エピソード $episodeNum")
-                            }
+                            repository.saveLastReadEpisode(novel.ncode, episodeNum)
+
+                            // SharedPreferencesに最後に読んだ小説の情報を保存
+                            val prefs = context.getSharedPreferences("novel_reader_prefs", ComponentActivity.MODE_PRIVATE)
+                            prefs.edit()
+                                .putString("last_read_ncode", novel.ncode)
+                                .putString("last_read_title", novel.title)
+                                .putInt("last_read_episode", episodeNum)
+                                .apply()
+
+                            Log.d("WebViewScreen", "最後に読んだエピソードを更新: ${novel.ncode} - エピソード $episodeNum")
                         }
                     }
                 }
@@ -731,411 +705,201 @@ fun NavButton(
         )
     }
 }
+class NovelParser(private val context: Context) {
+    private val TAG = "NovelParser"
 
+    // 進行状況を追跡するための変数
+    private val _processedCount = AtomicInteger(0)
+    private var _totalCount = 0
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun NovelListScreen(
-    selfServerPath: String,
-    selfServerAccess: Boolean,
-    onNovelSelected: (Novel) -> Unit,
-    onBack: () -> Unit
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val settingsStore = remember { SettingsStore(context) }
-    val parser = remember { NovelParser(context) }
-    val application = context.applicationContext as NovelReaderApplication
-    val repository = application.repository
+    // 進行状況を取得するプロパティ
+    val processedCount: Int get() = _processedCount.get()
+    val totalCount: Int get() = _totalCount
+    val progress: Float get() = if (_totalCount > 0) processedCount.toFloat() / _totalCount else 0f
 
-    var novels by remember { mutableStateOf<List<Novel>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isInitialLoading by remember { mutableStateOf(false) }
-    var isUpdating by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var hasValidPermission by remember { mutableStateOf(false) }
-
-    // 進行状況を追跡する変数
-    var progress by remember { mutableStateOf(0f) }
-    var processedCount by remember { mutableStateOf(0) }
-    var totalCount by remember { mutableStateOf(0) }
-    var progressMessage by remember { mutableStateOf("小説データを読み込んでいます...") }
-
-    // DB優先モードかどうかを確認
-    var isDbEnabled by remember { mutableStateOf(false) }
-
-    // 外部DB使用モードかどうかを確認
-    LaunchedEffect(key1 = Unit) {
-        try {
-            isDbEnabled = settingsStore.isDatabaseEnabled() // より包括的なチェックを使用;
-            Log.d("NovelListScreen", "外部DB有効状態: $isDbEnabled")
-            val dbEnabled = settingsStore.dbEnabled.first()
-            val dbUri = settingsStore.dbUri.first()
-
-            Log.d("NovelListScreen", "DB設定: 有効=$dbEnabled, URI=$dbUri")
-
-            // 権限の確認
-            val hasPermission = if (dbUri.isNotEmpty()) {
-                settingsStore.hasValidDatabaseUri(dbUri)
-            } else false
-            Log.d("NovelListScreen", "DB URI権限: $hasPermission")
-            // 外部DBが有効な場合は、DB経由で小説リストを取得
-            if (isDbEnabled) {
-                progressMessage = "データベースから小説データを読み込んでいます..."
-
-                // DBからデータを読み込む
-                repository.getAllNovels().collect { allNovels ->
-                    novels = allNovels
-                    isLoading = false
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("NovelListScreen", "外部DB設定の確認エラー: ${e.message}", e)
-        }
+    // 進行状況をリセット
+    fun resetProgress() {
+        _processedCount.set(0)
+        _totalCount = 0
     }
 
-    // 権限のチェックとデータ読み込みを分離
-    LaunchedEffect(key1 = selfServerPath, key2 = selfServerAccess) {
-        // 外部DBが有効の場合は自己サーバーモードをスキップ
-        if (isDbEnabled) {
-            return@LaunchedEffect
-        }
-
-        Log.d("NovelListScreen", "LaunchedEffect開始 - selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
-
-        try {
-            // 自己サーバーの有効性チェック
-            if (!selfServerAccess || selfServerPath.isEmpty()) {
-                Log.d("NovelListScreen", "自己サーバーモードが無効またはパスが空。内部DBからデータを読み込みます。")
-
-                // 内部DBに小説データが存在するか確認
-                val hasNovels = repository.hasAnyNovels()
-                if (hasNovels) {
-                    // 内部DBから小説データを読み込む
-                    progressMessage = "保存済みの小説データを読み込んでいます..."
-
-                    repository.getAllNovels().collect { allNovels ->
-                        novels = allNovels
-                        isLoading = false
-                    }
-                } else {
-                    // 内部DBに小説データがない場合
-                    errorMessage = "小説データがありません。自己サーバーモードを有効にするか、DBからデータをインポートしてください。"
-                    isLoading = false
+    suspend fun parseNovelListFromServerPath(serverPath: String): List<Novel> {
+        return withContext(Dispatchers.IO) {
+            try {
+                // キャッシュをチェック
+                if (NovelParserCache.hasCachedNovels(serverPath)) {
+                    Log.d(TAG, "キャッシュから小説リストを返します")
+                    return@withContext NovelParserCache.getCachedNovels()
                 }
 
-                return@LaunchedEffect
-            }
+                Log.d(TAG, "小説一覧の解析を開始: $serverPath")
+                val novelList = mutableListOf<Novel>()
 
-            // ここまで来たら、自己サーバーモードは有効で権限もある
-            Log.d("NovelListScreen", "自己サーバーモードは有効で権限もあります。小説データを読み込みます。")
+                // URIを解析
+                val uri = Uri.parse(serverPath)
+                Log.d(TAG, "URI scheme: ${uri.scheme}")
 
-            // DBに小説が存在するか確認
-            val hasNovels = repository.hasAnyNovels()
-            if (hasNovels) {
-                // DBから小説を読み込み
-                Log.d("NovelListScreen", "DBから小説データを読み込みます")
-                progressMessage = "保存済みの小説データを読み込んでいます..."
-                repository.getAllNovels().collect { allNovels ->
-                    novels = allNovels
-                    isLoading = false
+                // 直接novelsディレクトリをスキャンする方法を優先
+                when (uri.scheme) {
+                    "file" -> {
+                        // ファイルパスからの読み込み
+                        val file = File(uri.path ?: "")
+                        val baseDir = file.parentFile
+                        val novelsDir = File(baseDir, "novels")
 
-                    // バックグラウンドで更新チェック
-                    if (repository.needsUpdate()) {
-                        isUpdating = true
-                        Log.d("NovelListScreen", "バックグラウンドで更新チェックを開始")
-                        progressMessage = "小説の更新をチェックしています..."
+                        if (novelsDir.exists() && novelsDir.isDirectory) {
+                            Log.d(TAG, "novelsディレクトリを検出: ${novelsDir.absolutePath}")
+                            val novelDirs = novelsDir.listFiles { file -> file.isDirectory }
 
-                        // バックグラウンドでアップデートを実行
-                        scope.launch {
-                            try {
-                                progress = 0f
-                                val updatedNovels = repository.getUpdatedNovels(selfServerPath)
+                            // 総数を設定
+                            _totalCount = novelDirs?.size ?: 0
+                            _processedCount.set(0)
 
-                                // 更新中の進行状況を監視
-                                while (isUpdating) {
-                                    progress = repository.progress
-                                    processedCount = repository.processedCount
-                                    totalCount = repository.totalCount
+                            novelDirs?.forEach { dir ->
+                                try {
+                                    val ncode = dir.name
+                                    Log.d(TAG, "小説ディレクトリを検出: $ncode")
 
-                                    // 完了したら終了
-                                    if (progress >= 1f) {
-                                        isUpdating = false
+                                    // index.htmlからタイトルを取得
+                                    val indexFile = File(dir, "index.html")
+                                    if (indexFile.exists()) {
+                                        val novelHtml = indexFile.readText()
+                                        val doc = Jsoup.parse(novelHtml)
+
+                                        // 2つの方法でタイトルを探す
+                                        var title = doc.title()
+
+                                        // タイトルが見つからない場合はh1タグを探す
+                                        if (title.isBlank() || title == "Document") {
+                                            title = doc.select("h1").firstOrNull()?.text() ?: "無題の小説"
+                                        }
+
+                                        // エピソードファイルの数をカウント
+                                        val episodeFiles = dir.listFiles { file ->
+                                            file.name.startsWith("episode_") && file.name.endsWith(".html")
+                                        }
+                                        val episodeCount = episodeFiles?.size ?: 0
+
+                                        Log.d(TAG, "小説情報: タイトル=$title, エピソード数=$episodeCount")
+                                        novelList.add(Novel(
+                                            title = title,
+                                            ncode = ncode,
+                                            totalEpisodes = episodeCount
+                                        ))
+                                    } else {
+                                        Log.d(TAG, "index.htmlが見つかりません: ${indexFile.absolutePath}")
                                     }
 
-                                    //delay(100) // 少し待機
+                                    // 進行状況を更新
+                                    _processedCount.incrementAndGet()
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
+                                    // エラーがあっても進行状況は更新
+                                    _processedCount.incrementAndGet()
                                 }
+                            }
+                        } else {
+                            Log.e(TAG, "novelsディレクトリが見つかりません: ${novelsDir.absolutePath}")
+                            throw FileNotFoundException("novelsディレクトリが見つかりません")
+                        }
+                    }
+                    "content" -> {
+                        // ContentProviderからの読み込み
+                        Log.d(TAG, "ContentProviderからの読み込み: $uri")
 
-                                // タイムスタンプを更新
-                                repository.saveLastUpdateTimestamp(System.currentTimeMillis())
+                        val documentFile = DocumentFile.fromTreeUri(context, uri)
+                        if (documentFile == null || !documentFile.exists()) {
+                            throw IOException("指定されたディレクトリにアクセスできません")
+                        }
 
-                                // 更新がある場合のみトースト表示
-                                if (updatedNovels.isNotEmpty()) {
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(
-                                            context,
-                                            "${updatedNovels.size}作品に更新がありました",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                        // novelsディレクトリを探す
+                        val novelsDir = documentFile.findFile("novels")
+                        if (novelsDir != null && novelsDir.exists()) {
+                            Log.d(TAG, "novelsディレクトリを検出")
+                            val novelDirs = novelsDir.listFiles()
+
+                            // 総数を設定
+                            _totalCount = novelDirs.size
+                            _processedCount.set(0)
+
+                            novelDirs.forEach { dir ->
+                                if (dir.isDirectory) {
+                                    try {
+                                        val ncode = dir.name
+                                        Log.d(TAG, "小説ディレクトリを検出: $ncode")
+
+                                        // index.htmlからタイトルを取得
+                                        val indexFile = dir.findFile("index.html")
+                                        if (indexFile != null && indexFile.exists()) {
+                                            val inputStream = context.contentResolver.openInputStream(indexFile.uri)
+                                            val novelHtml = BufferedReader(InputStreamReader(inputStream)).use { it.readText() }
+                                            val doc = Jsoup.parse(novelHtml)
+
+                                            // 2つの方法でタイトルを探す
+                                            var title = doc.title()
+
+                                            // タイトルが見つからない場合はh1タグを探す
+                                            if (title.isBlank() || title == "Document") {
+                                                title = doc.select("h1").firstOrNull()?.text() ?: "無題の小説"
+                                            }
+
+                                            // エピソードファイルの数をカウント
+                                            val episodeFiles = dir.listFiles().filter { file ->
+                                                val fileName = file.name
+                                                fileName!!.startsWith("episode_") && fileName!!.endsWith(".html")
+                                            }
+                                            val episodeCount = episodeFiles.size
+
+                                            Log.d(TAG, "小説情報: タイトル=$title, エピソード数=$episodeCount")
+                                            novelList.add(Novel(
+                                                title = title,
+                                                ncode = ncode.toString(),
+                                                totalEpisodes = episodeCount
+                                            ))
+                                        } else {
+                                            Log.d(TAG, "index.htmlが見つかりません: $ncode")
+                                        }
+
+                                        // 進行状況を更新
+                                        _processedCount.incrementAndGet()
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "小説情報の解析エラー: ${dir.name}", e)
+                                        // エラーがあっても進行状況は更新
+                                        _processedCount.incrementAndGet()
                                     }
                                 }
-                            } catch (e: Exception) {
-                                Log.e("NovelListScreen", "更新チェック中にエラー: ${e.message}", e)
-                                isUpdating = false
                             }
+                        } else {
+                            Log.e(TAG, "novelsディレクトリが見つかりません")
+                            throw FileNotFoundException("novelsディレクトリが見つかりません")
                         }
                     }
-                }
-            } else {
-                // 初回読み込み：ファイルシステムからスキャンしてDBに保存
-                Log.d("NovelListScreen", "初回読み込み: ファイルシステムから小説データをスキャン")
-                isInitialLoading = true
-                progressMessage = "小説データを初めて読み込んでいます..."
-
-                // 小説解析の進行状況を監視
-                scope.launch {
-                    while (isInitialLoading) {
-                        progress = parser.progress
-                        processedCount = parser.processedCount
-                        totalCount = parser.totalCount
-                        //delay(100) // 少し待機
+                    else -> {
+                        Log.e(TAG, "未対応のURIスキーム: ${uri.scheme}")
+                        throw IllegalArgumentException("未対応のファイル形式です: ${uri.scheme}")
                     }
                 }
 
-                try {
-                    // NovelParserから小説リストを取得
-                    val parsedNovels = parser.parseNovelListFromServerPath(selfServerPath)
-                    Log.d("NovelListScreen", "取得した小説数: ${parsedNovels.size}")
-
-                    if (parsedNovels.isNotEmpty()) {
-                        // スキャンが終わったら、DBへの保存処理に進む
-                        progressMessage = "小説データをデータベースに保存しています..."
-                        progress = 0f // プログレスバーをリセット
-                        processedCount = 0
-                        totalCount = parsedNovels.size
-
-                        // 一括でDBに保存（書き込み中の進捗表示）
-                        withContext(Dispatchers.Default) {
-                            val novelCount = parsedNovels.size
-                            val batchSize = 50 // バッチサイズを調整
-                            val batches = parsedNovels.chunked(batchSize)
-
-                            batches.forEachIndexed { index, batch ->
-                                // 各小説のエピソード数を確認
-                                val updatedBatch = batch.map { novel ->
-                                    val episodeCount = repository.countEpisodesFromFileSystem(selfServerPath, novel.ncode)
-                                    novel.copy(totalEpisodes = episodeCount)
-                                }
-
-                                // バッチ単位でDBに保存
-                                repository.saveNovelsInBatch(updatedBatch)
-
-                                // 進行状況を更新
-                                processedCount = (index + 1) * batchSize
-                                if (processedCount > novelCount) processedCount = novelCount
-                                progress = processedCount.toFloat() / novelCount
-
-                                // 少し待機して進行状況を表示
-                                //delay(10)
-                            }
-                        }
-
-                        // タイムスタンプを更新
-                        repository.saveLastUpdateTimestamp(System.currentTimeMillis())
-
-                        // すべて完了したらFlowから小説データを読み込む
-                        progressMessage = "完了しました！"
-                        progress = 1f
-
-                        // 若干遅延を入れてユーザーに完了を認識させる
-                        //delay(500)
-
-                        // 読み込んだデータを表示
-                        repository.getAllNovels().collect { allNovels ->
-                            novels = allNovels
-                            isLoading = false
-                            isInitialLoading = false
-                            return@collect
-                        }
-                    } else {
-                        Log.d("NovelListScreen", "取得した小説がありません")
-                        errorMessage = "小説が見つかりませんでした。指定されたディレクトリに小説データが存在するか確認してください。"
-                        isLoading = false
-                        isInitialLoading = false
-                    }
-                } catch (e: Exception) {
-                    Log.e("NovelListScreen", "小説情報の更新に失敗しました: ${e.message}", e)
-                    errorMessage = "小説情報の更新に失敗しました: ${e.message}"
-                    isLoading = false
-                    isInitialLoading = false
+                // 小説リストが空の場合
+                if (novelList.isEmpty()) {
+                    Log.d(TAG, "小説が見つかりませんでした")
+                    throw FileNotFoundException("小説が見つかりませんでした")
                 }
-            }
-        } catch (e: Exception) {
-            Log.e("NovelListScreen", "LaunchedEffect内のエラー: ${e.message}", e)
-            errorMessage = "エラーが発生しました: ${e.message}"
-            isLoading = false
-            isInitialLoading = false
-            isUpdating = false
-        }
-    }
 
-    // UIの構築
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("小説一覧") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (isLoading || isInitialLoading) {
-                // 詳細なローディング表示
-                LoadingDialog(
-                    message = progressMessage,
-                    progress = progress,
-                    processedCount = processedCount,
-                    totalCount = totalCount
-                )
-            } else if (errorMessage != null) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = errorMessage ?: "",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                // キャッシュに結果を保存
+                NovelParserCache.cacheNovels(serverPath, novelList)
+                Log.d(TAG, "小説リストをキャッシュしました: ${novelList.size}件")
 
-                    // アクセス権限がない場合、設定画面へ移動するボタンを表示
-                    if (!hasValidPermission && selfServerPath.isNotEmpty()) {
-                        Button(onClick = {
-                            // 設定画面へ戻る処理
-                            onBack()
-                        }) {
-                            Text("設定画面へ戻る")
-                        }
-                    } else {
-                        Button(onClick = onBack) {
-                            Text("戻る")
-                        }
-                    }
-                }
-            } else if (novels.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("小説が見つかりませんでした")
-                    Spacer(modifier = Modifier.height(16.dp))
-                    if (selfServerAccess) {
-                        Text(
-                            text = "自己サーバーのパス: $selfServerPath",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            // デバッグ用に現在のパスを表示
-                            Log.d("NovelListScreen", "Current server path: $selfServerPath")
-                        }) {
-                            Text("パス情報を確認")
-                        }
-                    }
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // 小説リスト
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(novels) { novel ->
-                            NovelItem(
-                                novel = novel,
-                                onClick = { onNovelSelected(novel) }
-                            )
-                        }
-                    }
-
-                    // バックグラウンド更新の進行状況表示
-                    if (isUpdating) {
-                        DetailedProgressBar(
-                            progress = progress,
-                            message = progressMessage,
-                            processedCount = processedCount,
-                            totalCount = totalCount,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 16.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-fun NovelItem(
-    novel: Novel,
-    onClick: () -> Unit
-) {
-    // 未読数に基づいた透明度の設定
-    val alpha = if (novel.unreadCount == 0) 0.5f else 1.0f
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick)
-            .alpha(alpha)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text(
-                text = novel.title,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "最後に読んだ: ${novel.lastReadEpisode}話",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "未読: ${novel.unreadCount}/${novel.totalEpisodes}話",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (novel.unreadCount > 0)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+                novelList
+            } catch (e: Exception) {
+                Log.e(TAG, "小説一覧取得エラー", e)
+                throw e
             }
         }
     }
 
-}
-@Preview(showBackground = true)
-@Composable
-fun NovelReaderAppPreview() {
-    NRreaderTheme {
-        NovelReaderApp()
+    // キャッシュをクリア
+    fun clearCache() {
+        NovelParserCache.clearCache()
     }
 }
