@@ -53,6 +53,13 @@ fun SettingsScreen(
     var showDBWriteDialog by remember { mutableStateOf(false) }
 // 選択されたURIを一時的に保持する変数
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var showTitle by remember { mutableStateOf(true) }
+    var showAuthor by remember { mutableStateOf(true) }
+    var showSynopsis by remember { mutableStateOf(true) }
+    var showTags by remember { mutableStateOf(true) }
+    var showRating by remember { mutableStateOf(true) }
+    var showUpdateDate by remember { mutableStateOf(true) }
+    var showEpisodeCount by remember { mutableStateOf(true) }
     // Load saved preferences when the screen is created
     LaunchedEffect(key1 = true) {
         themeMode = settingsStore.themeMode.first()
@@ -323,7 +330,116 @@ fun SettingsScreen(
                     )
                 }
             }
+            SettingSection(title = "小説一覧の表示設定") {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    // タイトル表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("タイトルを表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showTitle,
+                            onCheckedChange = { showTitle = it }
+                        )
+                    }
 
+                    // 作者表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("作者名を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showAuthor,
+                            onCheckedChange = { showAuthor = it }
+                        )
+                    }
+
+                    // あらすじ表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("あらすじを表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showSynopsis,
+                            onCheckedChange = { showSynopsis = it }
+                        )
+                    }
+
+                    // タグ表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("タグを表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showTags,
+                            onCheckedChange = { showTags = it }
+                        )
+                    }
+
+                    // 評価表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("評価を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showRating,
+                            onCheckedChange = { showRating = it }
+                        )
+                    }
+
+                    // 更新日表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("更新日を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showUpdateDate,
+                            onCheckedChange = { showUpdateDate = it }
+                        )
+                    }
+
+                    // 話数表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("総話数を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showEpisodeCount,
+                            onCheckedChange = { showEpisodeCount = it }
+                        )
+                    }
+                }
+            }
             // 自己サーバーアクセスがONの場合のみディレクトリ選択ボタンを表示
             if (selfServerAccess) {
                 HorizontalDivider()
@@ -373,7 +489,7 @@ fun SettingsScreen(
                 onClick = {
                     scope.launch {
                         try {
-                            // 設定を保存
+                            // 基本設定を保存
                             settingsStore.saveAllSettings(
                                 themeMode = themeMode,
                                 fontFamily = fontFamily,
@@ -384,16 +500,26 @@ fun SettingsScreen(
                                 selfServerPath = selfServerPath
                             )
 
+                            // 表示設定も保存
+                            settingsStore.saveDisplaySettings(
+                                DisplaySettings(
+                                    showTitle = showTitle,
+                                    showAuthor = showAuthor,
+                                    showSynopsis = showSynopsis,
+                                    showTags = showTags,
+                                    showRating = showRating,
+                                    showUpdateDate = showUpdateDate,
+                                    showEpisodeCount = showEpisodeCount
+                                )
+                            )
+
                             // 保存確認ログ
-                            Log.d("SettingsScreen", "設定を保存しました: selfServerAccess=$selfServerAccess, selfServerPath=$selfServerPath")
+                            Log.d("SettingsScreen", "設定を保存しました")
 
                             // 保存したことをユーザーに通知
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(context, "設定を保存しました", Toast.LENGTH_SHORT).show()
                             }
-
-                            // キャッシュをクリア
-
 
                             onBack()
                         } catch (e: Exception) {

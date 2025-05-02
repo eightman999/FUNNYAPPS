@@ -1,6 +1,7 @@
 package com.shunlight_library.novel_reader
 
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
@@ -83,6 +84,12 @@ fun WebViewScreen(
                         }
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+
+                        // Cookieを有効にする設定を追加
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
+
                         settings.setSupportZoom(true)
                         settings.builtInZoomControls = true
                         settings.displayZoomControls = false

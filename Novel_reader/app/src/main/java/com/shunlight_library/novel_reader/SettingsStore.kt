@@ -12,6 +12,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
+// DisplaySettings用のデータクラス
+data class DisplaySettings(
+    val showTitle: Boolean = true,
+    val showAuthor: Boolean = true,
+    val showSynopsis: Boolean = false,
+    val showTags: Boolean = true,
+    val showRating: Boolean = false,
+    val showUpdateDate: Boolean = true,
+    val showEpisodeCount: Boolean = true
+)
+
 // DataStoreのインスタンスをトップレベルで定義
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -25,6 +36,15 @@ class SettingsStore(private val context: Context) {
         val SELF_SERVER_ACCESS = booleanPreferencesKey("self_server_access")
         val TEXT_ORIENTATION = stringPreferencesKey("text_orientation")
         val SELF_SERVER_PATH_KEY = stringPreferencesKey("self_server_path")
+
+        // 追加する表示設定のキー
+        val SHOW_TITLE = booleanPreferencesKey("show_title")
+        val SHOW_AUTHOR = booleanPreferencesKey("show_author")
+        val SHOW_SYNOPSIS = booleanPreferencesKey("show_synopsis")
+        val SHOW_TAGS = booleanPreferencesKey("show_tags")
+        val SHOW_RATING = booleanPreferencesKey("show_rating")
+        val SHOW_UPDATE_DATE = booleanPreferencesKey("show_update_date")
+        val SHOW_EPISODE_COUNT = booleanPreferencesKey("show_episode_count")
     }
 
     val defaultThemeMode = "System"
@@ -35,6 +55,14 @@ class SettingsStore(private val context: Context) {
     val defaultTextOrientation = "Horizontal"
     val defaultSelfServerPath = ""
 
+    // デフォルト値
+    val defaultShowTitle = true
+    val defaultShowAuthor = true
+    val defaultShowSynopsis = false
+    val defaultShowTags = true
+    val defaultShowRating = false
+    val defaultShowUpdateDate = true
+    val defaultShowEpisodeCount = true
     val themeMode: Flow<String> = context.dataStore.data
         .catch { exception: Throwable ->
             if (exception is IOException) {
@@ -129,6 +157,33 @@ class SettingsStore(private val context: Context) {
             preferences[SELF_SERVER_ACCESS] = selfServerAccess
             preferences[TEXT_ORIENTATION] = textOrientation
             preferences[SELF_SERVER_PATH_KEY] = selfServerPath
+        }
+    }
+
+    // 表示設定の取得
+    suspend fun getDisplaySettings(): DisplaySettings {
+        val preferences = context.dataStore.data.first()
+        return DisplaySettings(
+            showTitle = preferences[SHOW_TITLE] ?: defaultShowTitle,
+            showAuthor = preferences[SHOW_AUTHOR] ?: defaultShowAuthor,
+            showSynopsis = preferences[SHOW_SYNOPSIS] ?: defaultShowSynopsis,
+            showTags = preferences[SHOW_TAGS] ?: defaultShowTags,
+            showRating = preferences[SHOW_RATING] ?: defaultShowRating,
+            showUpdateDate = preferences[SHOW_UPDATE_DATE] ?: defaultShowUpdateDate,
+            showEpisodeCount = preferences[SHOW_EPISODE_COUNT] ?: defaultShowEpisodeCount
+        )
+    }
+
+    // 表示設定の保存
+    suspend fun saveDisplaySettings(settings: DisplaySettings) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_TITLE] = settings.showTitle
+            preferences[SHOW_AUTHOR] = settings.showAuthor
+            preferences[SHOW_SYNOPSIS] = settings.showSynopsis
+            preferences[SHOW_TAGS] = settings.showTags
+            preferences[SHOW_RATING] = settings.showRating
+            preferences[SHOW_UPDATE_DATE] = settings.showUpdateDate
+            preferences[SHOW_EPISODE_COUNT] = settings.showEpisodeCount
         }
     }
 

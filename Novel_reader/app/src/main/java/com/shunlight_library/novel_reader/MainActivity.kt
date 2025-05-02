@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -81,6 +82,7 @@ fun NovelReaderApp() {
     // 最後に読んだ小説の情報を取得
     var lastReadNovel by remember { mutableStateOf<LastReadNovelEntity?>(null) }
     var novelInfo by remember { mutableStateOf<NovelDescEntity?>(null) }
+    var showNovelList by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         lastReadNovel = repository.getMostRecentlyReadNovel()
@@ -152,6 +154,15 @@ fun NovelReaderApp() {
 
         showSettings -> {
             SettingsScreen(onBack = { showSettings = false })
+        }
+        showNovelList -> {
+            NovelListScreen(
+                onBack = { showNovelList = false },
+                onNovelClick = { ncode ->
+                    // TODO: 小説詳細画面への遷移を実装
+                    Toast.makeText(context, "選択された小説: $ncode", Toast.LENGTH_SHORT).show()
+                }
+            )
         }
 
         else -> {
@@ -313,7 +324,7 @@ fun NovelReaderApp() {
                             MenuButton(
                                 icon = "📚",
                                 text = "小説一覧",
-                                onClick = {}
+                                onClick = { showNovelList = true }
                             )
                             MenuButton(
                                 icon = ">",
