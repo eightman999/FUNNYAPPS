@@ -141,7 +141,7 @@ fun NovelReaderApp() {
                     ) {
                         MenuButton(
                             icon = "🔍",
-                            text = "キーワード検索",
+                            text = "キーワード",
                             onClick = {}
                         )
                         MenuButton(
@@ -214,7 +214,7 @@ fun NovelReaderApp() {
                         )
                         MenuButton(
                             icon = ">",
-                            text = "作者別・シリーズ別",
+                            text = "作者別\nシリーズ別",
                             onClick = {}
                         )
                     }

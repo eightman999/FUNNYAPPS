@@ -48,7 +48,10 @@ fun SettingsScreen(
     var selfServerAccess by remember { mutableStateOf(false) }
     var textOrientation by remember { mutableStateOf("Horizontal") }
     var selfServerPath by remember { mutableStateOf("") }
-
+// ダイアログ表示のための状態変数
+    var showDBWriteDialog by remember { mutableStateOf(false) }
+// 選択されたURIを一時的に保持する変数
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
     // Load saved preferences when the screen is created
     LaunchedEffect(key1 = true) {
         themeMode = settingsStore.themeMode.first()
@@ -89,6 +92,12 @@ fun SettingsScreen(
                     if (hasPermission) {
                         // 成功メッセージをトーストで表示
                         Toast.makeText(context, "ディレクトリへのアクセス権限を取得しました", Toast.LENGTH_SHORT).show()
+
+                        // 選択されたURIを保存
+                        selectedUri = uri
+
+                        // 内部DBへの書き込み確認ダイアログを表示
+                        showDBWriteDialog = true
                     } else {
                         // 権限取得失敗の場合
                         Toast.makeText(context, "アクセス権限の取得に失敗しました", Toast.LENGTH_SHORT).show()
@@ -100,7 +109,42 @@ fun SettingsScreen(
             }
         }
     }
-
+    if (showDBWriteDialog && selectedUri != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showDBWriteDialog = false
+            },
+            title = {
+                Text("内部DBへの書き込み")
+            },
+            text = {
+                Text("選択したディレクトリの情報を内部DBに書き込みますか？")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        // Yesが選択された場合の処理
+                        // TODO: 内部DBへの書き込み処理（後で実装）
+                        Toast.makeText(context, "内部DBに書き込みました", Toast.LENGTH_SHORT).show()
+                        showDBWriteDialog = false
+                    }
+                ) {
+                    Text("はい")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        // Noが選択された場合の処理
+                        Toast.makeText(context, "内部DBへの書き込みをキャンセルしました", Toast.LENGTH_SHORT).show()
+                        showDBWriteDialog = false
+                    }
+                ) {
+                    Text("いいえ")
+                }
+            }
+        )
+    }
     // Background color options
     val backgroundOptions = listOf("White", "Cream", "Light Gray", "Light Blue")
     val backgroundColors = mapOf(
