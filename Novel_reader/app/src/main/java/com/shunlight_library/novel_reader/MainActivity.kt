@@ -99,12 +99,23 @@ fun NovelReaderApp() {
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "新着1件・更新あり0件",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+
+                        // 新着・更新情報をボタンに変更
+                        Button(
+                            onClick = { /* TODO: 新着・更新情報画面に遷移 */ },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = LightOrange
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "新着1件・更新あり0件",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             text = "最後に開いていた小説",
@@ -113,16 +124,29 @@ fun NovelReaderApp() {
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        // 最後に読んだ小説の情報を表示
-                        Text(
-                            text = if (novelInfo != null)
-                                "${novelInfo!!.title} ${lastReadNovel!!.episode_no}話"
-                            else
-                                "まだ小説を読んでいません",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+
+                        // 最後に読んだ小説の情報をボタンに変更
+                        Button(
+                            onClick = { /* TODO: 最後に読んだ小説の続きを開く */ },
+                            enabled = novelInfo != null, // 小説情報がある場合のみ有効化
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = if (novelInfo != null) LightOrange else Color.Gray,
+                                disabledContainerColor = Color.LightGray,
+                                disabledContentColor = Color.DarkGray
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (novelInfo != null)
+                                    "${novelInfo!!.title} ${lastReadNovel!!.episode_no}話"
+                                else
+                                    "まだ小説を読んでいません",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(14.dp))
                     }
                 }
