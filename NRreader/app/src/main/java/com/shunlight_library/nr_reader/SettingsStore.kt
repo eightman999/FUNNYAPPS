@@ -31,10 +31,6 @@ class SettingsStore(private val context: Context) {
         val TEXT_ORIENTATION = stringPreferencesKey("text_orientation")
         val SELF_SERVER_PATH_KEY = stringPreferencesKey("self_server_path")
 
-        // データベース関連の設定キー
-        val DB_ENABLED = booleanPreferencesKey("db_enabled")
-        val DB_URI = stringPreferencesKey("db_uri")
-        val DB_LAST_SYNC = longPreferencesKey("db_last_sync")
     }
 
     // デフォルト値の定義
@@ -45,11 +41,6 @@ class SettingsStore(private val context: Context) {
     val defaultSelfServerAccess = false
     val defaultTextOrientation = "Horizontal"
     val defaultSelfServerPath = ""
-
-    // データベース関連のデフォルト値
-    val defaultDbEnabled = false
-    val defaultDbUri = ""
-    val defaultDbLastSync = 0L
 
     // テーマモード設定をFlowとして取得
     val themeMode: Flow<String> = context.dataStore.data
@@ -129,46 +120,7 @@ class SettingsStore(private val context: Context) {
             preferences[TEXT_ORIENTATION] ?: defaultTextOrientation
         }
 
-    // データベース有効設定をFlowとして取得
-    val dbEnabled: Flow<Boolean> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[DB_ENABLED] ?: defaultDbEnabled
-        }
 
-    // データベースURIをFlowとして取得
-    val dbUri: Flow<String> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[DB_URI] ?: defaultDbUri
-        }
-
-    // 本体コピー設定をFlowとして取得
-
-    // 最終同期日時をFlowとして取得
-    val dbLastSync: Flow<Long> = context.dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[DB_LAST_SYNC] ?: defaultDbLastSync
-        }
 
     // テーマモード設定の保存
     suspend fun saveThemeMode(mode: String) {
@@ -224,27 +176,8 @@ class SettingsStore(private val context: Context) {
         }
     }
 
-    // データベース設定の保存
-    suspend fun saveDatabaseSettings(dbUri: String, isEnabled: Boolean) {
-        try {
-            context.dataStore.edit { preferences ->
-                preferences[DB_URI] = dbUri
-                preferences[DB_ENABLED] = isEnabled
-                preferences[DB_LAST_SYNC] = System.currentTimeMillis()
-            }
-            Log.d("SettingsStore", "データベース設定を保存しました: URI=$dbUri, 有効=$isEnabled")
-        } catch (e: Exception) {
-            Log.e("SettingsStore", "データベース設定の保存エラー: ${e.message}", e)
-            throw e
-        }
-    }
 
-    // 最終同期時刻の更新
-    suspend fun updateDatabaseLastSync() {
-        context.dataStore.edit { preferences ->
-            preferences[DB_LAST_SYNC] = System.currentTimeMillis()
-        }
-    }
+
 
     // 永続的なアクセス権限を持つURIを取得
     fun getPersistedUriPermissions(): List<Uri> {
@@ -287,36 +220,6 @@ class SettingsStore(private val context: Context) {
             Log.e("SettingsStore", "権限確認エラー: ${e.message}", e)
             return false
         }
-    }
-
-    // データベースURIが有効かチェック
-    fun hasValidDatabaseUri(uriString: String): Boolean {
-        if (uriString.isEmpty()) return false
-
-        try {
-            // URIの形式をチェック
-            val uri = Uri.parse(uriString)
-
-            // 権限チェック
-            val hasPermission = context.contentResolver.persistedUriPermissions.any {
-                it.uri == uri && it.isReadPermission
-            }
-
-            Log.d("SettingsStore", "DB URI権限チェック結果: $hasPermission")
-            return hasPermission
-
-        } catch (e: Exception) {
-            Log.e("SettingsStore", "DB URI権限確認エラー: ${e.message}", e)
-            return false
-        }
-    }
-
-    // データベース機能が有効で、URIが設定されているかを確認
-    suspend fun isDatabaseEnabled(): Boolean {
-        val enabled = dbEnabled.first()
-        val uri = dbUri.first()
-
-        return enabled && uri.isNotEmpty() && hasValidDatabaseUri(uri)
     }
 
     // 永続的な権限を持つURIが有効期限切れでないか確認
