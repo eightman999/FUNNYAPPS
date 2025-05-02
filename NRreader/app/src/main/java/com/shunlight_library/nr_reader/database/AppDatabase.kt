@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InternalEpisodeEntity::class,
         InternalLastReadEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +24,13 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // インデックスを作成
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_novels_last_update ON novels_descs(last_update_date)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS idx_novels_update_check ON novels_descs(ncode, rating, total_ep, general_all_no, updated_at)")
+            }
+        }
 
         // UnifiedNovelEntityからの移行を処理するMigration
         private val MIGRATION_10_11 = object : Migration(10, 11) {
@@ -113,7 +120,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "novel_database"
                 )
-                    .addMigrations(MIGRATION_10_11)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_11_12)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
