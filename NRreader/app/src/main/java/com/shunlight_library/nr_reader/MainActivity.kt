@@ -7,6 +7,7 @@
 //<parameter name="title">MainActivity.kt (修正後)</parameter>
 //<parameter name="content">package com.shunlight_library.nr_reader
 
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -42,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import androidx.documentfile.provider.DocumentFile
+import com.shunlight_library.nr_reader.*
 import com.shunlight_library.nr_reader.ui.components.DetailedProgressBar
 import com.shunlight_library.nr_reader.ui.components.LoadingDialog
 import com.shunlight_library.nr_reader.ui.theme.LocalAppSettings
@@ -51,7 +54,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
+import org.jsoup.Jsoup
+import java.io.*
+import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : ComponentActivity() {
     // MainActivity.kt の onCreate メソッドに追加
