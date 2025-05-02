@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
+import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.ui.theme.Novel_readerTheme
 import com.shunlight_library.novel_reader.ui.theme.LightOrange
 import kotlinx.coroutines.flow.first
@@ -51,9 +53,25 @@ class MainActivity : ComponentActivity() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+// MainActivityの表示を更新
 @Composable
 fun NovelReaderApp() {
     var showSettings by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // リポジトリを取得
+    val repository = NovelReaderApplication.getRepository()
+
+    // 最後に読んだ小説の情報を取得
+    var lastReadNovel by remember { mutableStateOf<LastReadNovelEntity?>(null) }
+    var novelInfo by remember { mutableStateOf<NovelDescEntity?>(null) }
+
+    LaunchedEffect(Unit) {
+        lastReadNovel = repository.getMostRecentlyReadNovel()
+        if (lastReadNovel != null) {
+            novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
+        }
+    }
 
     // 設定画面の表示
     if (showSettings) {
@@ -95,8 +113,12 @@ fun NovelReaderApp() {
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        // 最後に読んだ小説の情報を表示
                         Text(
-                            text = "Re：ゼロから始める異世界生活 1話",
+                            text = if (novelInfo != null)
+                                "${novelInfo!!.title} ${lastReadNovel!!.episode_no}話"
+                            else
+                                "まだ小説を読んでいません",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
