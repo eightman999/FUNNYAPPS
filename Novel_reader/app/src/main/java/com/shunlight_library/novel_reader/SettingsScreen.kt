@@ -32,6 +32,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
 
+import com.shunlight_library.novel_reader.data.sync.ImprovedDatabaseSyncManager
+import com.shunlight_library.novel_reader.ui.DatabaseSyncActivity
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -310,7 +314,26 @@ fun SettingsScreen(
                     )
                 }
             }
-
+            SettingSection (title = "DB同期"){
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("外部DBの同期")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Button(
+                        onClick = {
+                            // 外部DB同期処理を開始
+                            val intent = Intent(context, DatabaseSyncActivity::class.java)
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Text("同期する")
+                    }
+                }
+            }
             HorizontalDivider()
 
             // Text Orientation Setting
@@ -580,4 +603,93 @@ fun RadioButtonOption(
         Spacer(modifier = Modifier.width(16.dp))
         Text(text)
     }
+}
+
+@Composable
+fun DatabaseSyncDialog(
+    selectedUri: Uri,
+    onDismiss: () -> Unit,
+    onComplete: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSyncing by remember { mutableStateOf(false) }
+    var syncResult by remember { mutableStateOf<Boolean?>(null) }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isSyncing) onDismiss()
+        },
+        title = {
+            Text("内部DBへの書き込み")
+        },
+        text = {
+            when {
+                isSyncing -> {
+                    CircularProgressIndicator()
+                }
+                syncResult == null -> {
+                    Text("選択したディレクトリの情報を内部DBに同期しますか？")
+                }
+                syncResult == true -> {
+                    Text("同期が完了しました！")
+                }
+                else -> {
+                    Text("同期中にエラーが発生しました。もう一度お試しください。")
+                }
+            }
+        },
+        confirmButton = {
+            if (syncResult == null && !isSyncing) {
+                TextButton(
+                    onClick = {
+                        isSyncing = true
+                        scope.launch {
+                            try {
+                                val syncManager = DatabaseSyncManager(context)
+                                val result = syncManager.syncFromExternalDb(selectedUri)
+                                syncResult = result
+
+                                if (result) {
+                                    Toast.makeText(context, "データベースの同期に成功しました", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "データベースの同期に失敗しました", Toast.LENGTH_SHORT).show()
+                                }
+
+                                isSyncing = false
+                                onComplete(result)
+                            } catch (e: Exception) {
+                                Log.e("DatabaseSync", "同期エラー: ${e.message}", e)
+                                syncResult = false
+                                isSyncing = false
+                                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_LONG).show()
+                                onComplete(false)
+                            }
+                        }
+                    }
+                ) {
+                    Text("同期する")
+                }
+            } else {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                    }
+                ) {
+                    Text("閉じる")
+                }
+            }
+        },
+        dismissButton = {
+            if (syncResult == null && !isSyncing) {
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                    }
+                ) {
+                    Text("キャンセル")
+                }
+            }
+        }
+    )
 }

@@ -30,6 +30,7 @@ import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.ui.theme.Novel_readerTheme
 import com.shunlight_library.novel_reader.ui.theme.LightOrange
 import androidx.activity.compose.BackHandler
+import com.shunlight_library.novel_reader.ui.DatabaseSyncActivity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -394,6 +395,14 @@ fun NovelReaderApp() {
                                 icon = "⚙",
                                 text = "設定",
                                 onClick = { showSettings = true }
+                            )
+                            MenuButton(
+                                icon = "🔄",
+                                text = "データベース同期",
+                                onClick = {
+                                    val intent = Intent(context, DatabaseSyncActivity::class.java)
+                                    context.startActivity(intent)
+                                }
                             )
                         }
                     }

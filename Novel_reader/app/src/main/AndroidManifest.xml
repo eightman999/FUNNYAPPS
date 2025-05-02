@@ -29,6 +29,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+                android:name=".ui.DatabaseSyncActivity"
+                android:exported="false"
+                android:label="データベース同期"
+                android:theme="@style/Theme.Novel_reader" />
     </application>
 
 </manifest>
