@@ -72,36 +72,36 @@ fun NovelReaderApp() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(LightOrange)
-                            .padding(16.dp)
+                            .padding(8.dp)
                     ) {
                         Text(
                             text = "新着・更新情報",
                             color = Color.White,
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "新着1件・更新あり0件",
                             color = Color.White,
-                            fontSize = 28.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             text = "最後に開いていた小説",
                             color = Color.White,
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Normal
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Re：ゼロから始める異世界生活 1話",
                             color = Color.White,
-                            fontSize = 28.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                     }
                 }
 
@@ -115,11 +115,11 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
-                            icon = "⚪⚪⚪",
+                            icon = "⚪",
                             text = "ランキング",
                             onClick = {}
                         )
@@ -136,7 +136,7 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
@@ -151,23 +151,23 @@ fun NovelReaderApp() {
                         )
                     }
                 }
-
-                // ノクターンノベルズとムーンライトノベルズ
+                //カクヨム＆R18セクション
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
-                            icon = "👑",
-                            text = "ノクターンノベルズ",
+                            icon = ">",
+                            text = "カクヨム",
                             onClick = {}
                         )
+
                         MenuButton(
-                            icon = "🌙",
-                            text = "ムーンライトノベルズ",
+                            icon = "<",
+                            text = "R18",
                             onClick = {}
                         )
                     }
@@ -183,7 +183,7 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
@@ -204,7 +204,7 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
@@ -225,7 +225,7 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.Start
                     ) {
                         MenuButton(
@@ -247,7 +247,7 @@ fun NovelReaderApp() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         MenuButton(
@@ -273,12 +273,12 @@ fun SectionHeader(title: String) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.LightGray.copy(alpha = 0.3f))
-            .padding(16.dp)
+            .padding(8.dp)
     ) {
         Text(
             text = title,
             color = Color.Gray,
-            fontSize = 18.sp
+            fontSize = 16.sp
         )
     }
 }
@@ -298,7 +298,7 @@ fun MenuButton(
     ) {
         Text(
             text = icon,
-            fontSize = 24.sp,
+            fontSize = 18.sp,
             modifier = Modifier.padding(end = 8.dp)
         )
         Text(
