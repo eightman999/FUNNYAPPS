@@ -62,6 +62,8 @@ fun SettingsScreenUpdated(
     var showUpdateDate by remember { mutableStateOf(true) }
     var showEpisodeCount by remember { mutableStateOf(true) }
 
+
+
     // Load saved preferences when the screen is created
     LaunchedEffect(key1 = true) {
         themeMode = settingsStore.themeMode.first()
@@ -166,12 +168,25 @@ fun SettingsScreenUpdated(
     }
 
     // Background color options
-    val backgroundOptions = listOf("White", "Cream", "Light Gray", "Light Blue")
+    val backgroundOptions = listOf("Default", "White", "Cream", "Light Gray", "Light Blue", "Dark Gray", "Black")
     val backgroundColors = mapOf(
-        "White" to Color.White,
+        "Default" to MaterialTheme.colorScheme.background,
+        "White" to Color(0xFFFFFFFF),
         "Cream" to Color(0xFFF5F5DC),
         "Light Gray" to Color(0xFFEEEEEE),
-        "Light Blue" to Color(0xFFE6F2FF)
+        "Light Blue" to Color(0xFFE6F2FF),
+        "Dark Gray" to Color(0xFF303030),
+        "Black" to Color(0xFF000000)
+    )
+
+// フォントカラーの選択肢
+    val fontColorOptions = listOf("Black", "Dark Gray", "Navy", "Dark Green", "White")
+    val fontColors = mapOf(
+        "Black" to "#000000",
+        "Dark Gray" to "#333333",
+        "Navy" to "#000080",
+        "Dark Green" to "#006400",
+        "White" to "#FFFFFF"
     )
 
     Scaffold(
@@ -424,6 +439,113 @@ fun SettingsScreenUpdated(
             }
 
             HorizontalDivider()
+            SettingSection(title = "小説表示設定") {
+                // 背景色設定
+                Text(
+                    text = "背景色 (エピソード表示時)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                // デフォルト背景色の使用切り替え
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("アプリのデフォルト背景色を使用")
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = useDefaultBackground,
+                        onCheckedChange = { useDefaultBackground = it }
+                    )
+                }
+
+                // デフォルト背景色を使わない場合のみ、カスタム背景色の選択肢を表示
+                if (!useDefaultBackground) {
+                    backgroundOptions.forEach { option ->
+                        if (option != "Default") { // "Default"は上のスイッチで制御するので除外
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = episodeBackgroundColor == backgroundColors[option].toString(),
+                                        onClick = {
+                                            val colorHex = when (option) {
+                                                "White" -> "#FFFFFF"
+                                                "Cream" -> "#F5F5DC"
+                                                "Light Gray" -> "#EEEEEE"
+                                                "Light Blue" -> "#E6F2FF"
+                                                "Dark Gray" -> "#303030"
+                                                "Black" -> "#000000"
+                                                else -> "#FFFFFF"
+                                            }
+                                            episodeBackgroundColor = colorHex
+                                        }
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = episodeBackgroundColor == backgroundColors[option].toString(),
+                                    onClick = null // null because we're handling click on the row
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(option)
+                                Spacer(modifier = Modifier.weight(1f))
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .background(
+                                            color = backgroundColors[option] ?: Color.White
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // フォント色の設定
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "フォント色 (エピソード表示時)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                fontColorOptions.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = fontColor == fontColors[option],
+                                onClick = { fontColor = fontColors[option] ?: "#000000" }
+                            )
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = fontColor == fontColors[option],
+                            onClick = null // null because we're handling click on the row
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(option)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(
+                                    color = try {
+                                        Color(android.graphics.Color.parseColor(fontColors[option]))
+                                    } catch (e: Exception) {
+                                        Color.Black
+                                    }
+                                )
+                        )
+                    }
+                }
+            }
 
             // データベース同期セクション（自己サーバー設定とは別）
 
@@ -473,7 +595,10 @@ fun SettingsScreenUpdated(
                                 backgroundColor = backgroundColor,
                                 selfServerAccess = selfServerAccess,
                                 textOrientation = textOrientation,
-                                selfServerPath = selfServerPath
+                                selfServerPath = selfServerPath,
+                                fontColor = fontColor,
+                                episodeBackgroundColor = episodeBackgroundColor,
+                                useDefaultBackground = useDefaultBackground
                             )
 
                             // 表示設定も保存

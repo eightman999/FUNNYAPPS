@@ -45,7 +45,15 @@ class SettingsStore(private val context: Context) {
         val SHOW_RATING = booleanPreferencesKey("show_rating")
         val SHOW_UPDATE_DATE = booleanPreferencesKey("show_update_date")
         val SHOW_EPISODE_COUNT = booleanPreferencesKey("show_episode_count")
+
+        val FONT_COLOR = stringPreferencesKey("font_color")
+        val EPISODE_BACKGROUND_COLOR = stringPreferencesKey("episode_background_color")
+        val USE_DEFAULT_BACKGROUND = booleanPreferencesKey("use_default_background")
     }
+
+    val defaultFontColor = "#FFFFFF" // W
+    val defaultEpisodeBackgroundColor = "#000000" // B
+    val defaultUseDefaultBackground = true
 
     val defaultThemeMode = "System"
     val defaultFontFamily = "Gothic"
@@ -138,7 +146,41 @@ class SettingsStore(private val context: Context) {
     val selfServerPath = context.dataStore.data.map { preferences: Preferences ->
         preferences[SELF_SERVER_PATH_KEY] ?: ""
     }
+    val fontColor: Flow<String> = context.dataStore.data
+        .catch { exception: Throwable ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences: Preferences ->
+            preferences[FONT_COLOR] ?: defaultFontColor
+        }
 
+    val episodeBackgroundColor: Flow<String> = context.dataStore.data
+        .catch { exception: Throwable ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences: Preferences ->
+            preferences[EPISODE_BACKGROUND_COLOR] ?: defaultEpisodeBackgroundColor
+        }
+
+    val useDefaultBackground: Flow<Boolean> = context.dataStore.data
+        .catch { exception: Throwable ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences: Preferences ->
+            preferences[USE_DEFAULT_BACKGROUND] ?: defaultUseDefaultBackground
+        }
     // すべての設定を保存するためのメソッド
     suspend fun saveAllSettings(
         themeMode: String,
@@ -147,9 +189,13 @@ class SettingsStore(private val context: Context) {
         backgroundColor: String,
         selfServerAccess: Boolean,
         textOrientation: String,
-        selfServerPath: String
+        selfServerPath: String,
+        fontColor: String,
+        episodeBackgroundColor: String,
+        useDefaultBackground: Boolean
     ) {
         context.dataStore.edit { preferences ->
+            // 既存の設定
             preferences[THEME_MODE] = themeMode
             preferences[FONT_FAMILY] = fontFamily
             preferences[FONT_SIZE] = fontSize
@@ -157,6 +203,11 @@ class SettingsStore(private val context: Context) {
             preferences[SELF_SERVER_ACCESS] = selfServerAccess
             preferences[TEXT_ORIENTATION] = textOrientation
             preferences[SELF_SERVER_PATH_KEY] = selfServerPath
+
+            // 新しい設定
+            preferences[FONT_COLOR] = fontColor
+            preferences[EPISODE_BACKGROUND_COLOR] = episodeBackgroundColor
+            preferences[USE_DEFAULT_BACKGROUND] = useDefaultBackground
         }
     }
 
@@ -191,6 +242,23 @@ class SettingsStore(private val context: Context) {
     suspend fun saveSelfServerPath(path: String) {
         context.dataStore.edit { preferences: MutablePreferences ->
             preferences[SELF_SERVER_PATH_KEY] = path
+        }
+    }
+    suspend fun saveFontColor(color: String) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_COLOR] = color
+        }
+    }
+
+    suspend fun saveEpisodeBackgroundColor(color: String) {
+        context.dataStore.edit { preferences ->
+            preferences[EPISODE_BACKGROUND_COLOR] = color
+        }
+    }
+
+    suspend fun saveUseDefaultBackground(useDefault: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USE_DEFAULT_BACKGROUND] = useDefault
         }
     }
 }
