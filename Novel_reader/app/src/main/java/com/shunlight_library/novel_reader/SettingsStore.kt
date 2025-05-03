@@ -261,4 +261,10 @@ class SettingsStore(private val context: Context) {
             preferences[USE_DEFAULT_BACKGROUND] = useDefault
         }
     }
+    suspend fun saveFontSize(size: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_SIZE] = size
+        }
+    }
+
 }
