@@ -164,8 +164,9 @@ fun NovelReaderApp() {
             NovelListScreen(
                 onBack = { showNovelList = false },
                 onNovelClick = { ncode ->
-                    // TODO: 小説詳細画面への遷移を実装
-                    Toast.makeText(context, "選択された小説: $ncode", Toast.LENGTH_SHORT).show()
+                    currentNcode = ncode
+                    showNovelList = false
+                    showEpisodeList = true
                 }
             )
 
