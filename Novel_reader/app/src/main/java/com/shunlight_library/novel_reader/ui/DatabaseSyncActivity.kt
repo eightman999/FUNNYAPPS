@@ -68,7 +68,7 @@ fun DatabaseSyncScreen(
     var currentCount by remember { mutableStateOf(0) }
     var totalCount by remember { mutableStateOf(0) }
     // ログメッセージに関する状態変数を修正
-    val maxLogMessages = 150 // 最大ログ表示数
+    val maxLogMessages = 20 // 最大ログ表示数
 
     // ログ追加用のヘルパー関数
     fun addLog(message: String) {

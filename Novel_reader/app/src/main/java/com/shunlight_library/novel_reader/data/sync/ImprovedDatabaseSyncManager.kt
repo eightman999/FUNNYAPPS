@@ -32,7 +32,7 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
 
     // 進捗更新のスロットリングのための変数を追加
     private var lastProgressUpdateTime = 0L
-    private val minUpdateIntervalMs = 250 // 最小更新間隔（ミリ秒）
+    private val minUpdateIntervalMs = 500 // 最小更新間隔（ミリ秒）
     private val progressThreshold = 0.01f // 進捗更新の閾値（1%）
 
     // 前回の進捗状態を保持
@@ -401,7 +401,7 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             val columnETitle = getColumnIndexSafely(cursor, "e_title")
             val columnUpdateTime = getColumnIndexSafely(cursor, "update_time")
 
-            val batchSize = 20
+            val batchSize = 50
             val episodes = mutableListOf<EpisodeEntity>()
 
             // データの読み取りとバッチ処理
