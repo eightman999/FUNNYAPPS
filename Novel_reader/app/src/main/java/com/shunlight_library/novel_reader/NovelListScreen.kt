@@ -47,8 +47,10 @@ enum class SearchField(val displayName: String) {
 }
 
 // フィルター設定のデータクラス
+// フィルター設定のデータクラス
 data class FilterSettings(
     val minRating: Int = 0,
+    val maxRating: Int = 5,  // 最高レーティングを追加
     val hideRating5WithNoEpisodes: Boolean = false,
     val showCompleted: Boolean = true,
     val showOngoing: Boolean = true
@@ -105,6 +107,7 @@ fun NovelListScreen(
     // フィルターとソートを適用する関数
     fun applyFiltersAndSort() {
         // フィルターの適用
+        // フィルターの適用
         var filtered = allNovels.filter { novelWithInfo ->
             val novel = novelWithInfo.novel
 
@@ -114,8 +117,8 @@ fun NovelListScreen(
                 return@filter false
             }
 
-            // ratingでフィルタリング
-            if (novel.rating < filterSettings.minRating) {
+            // ratingでフィルタリング（最低値と最高値の両方）
+            if (novel.rating < filterSettings.minRating || novel.rating > filterSettings.maxRating) {
                 return@filter false
             }
 
@@ -213,7 +216,7 @@ fun NovelListScreen(
     }
 
     // 検索、フィルター、ソートが変更されたとき
-    LaunchedEffect(key1 = searchText, key2 = searchField, key3 = sortField, key4 = sortDirection, key5 = filterSettings) {
+    LaunchedEffect(searchText, searchField, sortField, sortDirection, filterSettings) {
         applyFiltersAndSort()
     }
 
@@ -302,6 +305,7 @@ fun NovelListScreen(
     }
 
     // フィルターダイアログ
+    // フィルターダイアログ
     if (showFilterDialog) {
         AlertDialog(
             onDismissRequest = { showFilterDialog = false },
@@ -311,12 +315,45 @@ fun NovelListScreen(
                     // 最低レーティング
                     Text("最低レーティング: ${filterSettings.minRating}",
                         style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Slider(
                         value = filterSettings.minRating.toFloat(),
                         onValueChange = {
-                            filterSettings = filterSettings.copy(minRating = it.toInt())
+                            // 最低値は最高値を超えないようにする
+                            val newMinRating = minOf(it.toInt(), filterSettings.maxRating)
+                            filterSettings = filterSettings.copy(minRating = newMinRating)
+                        },
+                        valueRange = 0f..5f,
+                        steps = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("0")
+                        Text("1")
+                        Text("2")
+                        Text("3")
+                        Text("4")
+                        Text("5")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 最高レーティング
+                    Text("最高レーティング: ${filterSettings.maxRating}",
+                        style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Slider(
+                        value = filterSettings.maxRating.toFloat(),
+                        onValueChange = {
+                            // 最高値は最低値を下回らないようにする
+                            val newMaxRating = maxOf(it.toInt(), filterSettings.minRating)
+                            filterSettings = filterSettings.copy(maxRating = newMaxRating)
                         },
                         valueRange = 0f..5f,
                         steps = 4,
@@ -382,7 +419,6 @@ fun NovelListScreen(
             }
         )
     }
-
     // 検索フィールド選択ダイアログ
     if (showSearchFieldDialog) {
         AlertDialog(
