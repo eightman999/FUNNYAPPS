@@ -80,4 +80,13 @@ class NovelRepository(
         )
         lastReadNovelDao.insertLastRead(lastRead)
     }
+    suspend fun updateNovel(novel: NovelDescEntity) {
+        novelDescDao.updateNovel(novel)
+    }
+
+    suspend fun deleteLastRead(ncode: String) {
+        lastReadNovelDao.getLastReadByNcode(ncode)?.let {
+            lastReadNovelDao.deleteLastRead(it)
+        }
+    }
 }

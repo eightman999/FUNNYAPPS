@@ -67,7 +67,11 @@ fun NovelReaderApp() {
     var currentUrl by remember { mutableStateOf("") }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
+    // エピソード一覧と閲覧のための変数を追加
+    var showEpisodeList by remember { mutableStateOf(false) }
+    var showEpisodeView by remember { mutableStateOf(false) }
+    var currentNcode by remember { mutableStateOf("") }
+    var currentEpisodeNo by remember { mutableStateOf("") }
     // R18コンテンツ用のダイアログ表示状態
     var showR18Dialog by remember { mutableStateOf(false) }
 
@@ -164,8 +168,52 @@ fun NovelReaderApp() {
                     Toast.makeText(context, "選択された小説: $ncode", Toast.LENGTH_SHORT).show()
                 }
             )
-        }
 
+        }
+        showEpisodeList -> {
+            EpisodeListScreen(
+                ncode = currentNcode,
+                onBack = {
+                    showEpisodeList = false
+                    showNovelList = true
+                },
+                onEpisodeClick = { ncode, episodeNo ->
+                    currentNcode = ncode
+                    currentEpisodeNo = episodeNo
+                    showEpisodeView = true
+                    showEpisodeList = false
+                }
+            )
+        }
+        showEpisodeView -> {
+            EpisodeViewScreen(
+                ncode = currentNcode,
+                episodeNo = currentEpisodeNo,
+                onBack = {
+                    showEpisodeView = false
+                    showEpisodeList = true
+                },
+                onPrevious = {
+                    val prevEpisodeNo = currentEpisodeNo.toIntOrNull()?.let { it - 1 }?.toString() ?: "1"
+                    if (prevEpisodeNo.toInt() >= 1) {
+                        currentEpisodeNo = prevEpisodeNo
+                    }
+                },
+                onNext = {
+                    scope.launch {
+                        val nextEpisodeNo = currentEpisodeNo.toIntOrNull()?.let { it + 1 }?.toString() ?: "1"
+                        try {
+                            val novel = repository.getNovelByNcode(currentNcode)
+                            if (novel != null && nextEpisodeNo.toInt() <= novel.total_ep) {
+                                currentEpisodeNo = nextEpisodeNo
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "小説情報取得エラー: ${e.message}")
+                        }
+                    }
+                }
+            )
+        }
         else -> {
             // メイン画面（既存のコード）
             Scaffold { innerPadding ->
