@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import kotlinx.coroutines.launch
@@ -191,7 +192,7 @@ fun EpisodeViewScreen(
                 Text(
                     text = episode!!.body,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = androidx.compose.ui.unit.sp.SP(fontSize.toFloat())
+                        fontSize = 16.sp
                     ),
                     modifier = Modifier.padding(bottom = 32.dp)
                 )
