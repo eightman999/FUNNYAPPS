@@ -465,7 +465,7 @@ fun NovelReaderApp() {
                                 onClick = { showSettings = true }
                             )
                             MenuButton(
-                                icon = "🔄",
+                                icon = "",
                                 text = "同期",
                                 onClick = {
                                     val intent = Intent(context, DatabaseSyncActivity::class.java)

@@ -3,9 +3,11 @@ package com.shunlight_library.novel_reader.data.repository
 import com.shunlight_library.novel_reader.data.dao.EpisodeDao
 import com.shunlight_library.novel_reader.data.dao.LastReadNovelDao
 import com.shunlight_library.novel_reader.data.dao.NovelDescDao
+import com.shunlight_library.novel_reader.data.dao.UpdateQueueDao
 import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
+import com.shunlight_library.novel_reader.data.entity.UpdateQueueEntity
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -14,7 +16,8 @@ import java.util.Locale
 class NovelRepository(
     private val episodeDao: EpisodeDao,
     private val novelDescDao: NovelDescDao,
-    private val lastReadNovelDao: LastReadNovelDao
+    private val lastReadNovelDao: LastReadNovelDao,
+    private val updateQueueDao: UpdateQueueDao
 ) {
     // Novel Description関連メソッド
     val allNovels: Flow<List<NovelDescEntity>> = novelDescDao.getAllNovels()
@@ -88,5 +91,22 @@ class NovelRepository(
         lastReadNovelDao.getLastReadByNcode(ncode)?.let {
             lastReadNovelDao.deleteLastRead(it)
         }
+    }
+    val allUpdateQueue: Flow<List<UpdateQueueEntity>> = updateQueueDao.getAllUpdateQueue()
+
+    suspend fun getUpdateQueueByNcode(ncode: String): UpdateQueueEntity? {
+        return updateQueueDao.getUpdateQueueByNcode(ncode)
+    }
+
+    suspend fun insertUpdateQueue(updateQueue: UpdateQueueEntity) {
+        updateQueueDao.insertUpdateQueue(updateQueue)
+    }
+
+    suspend fun insertUpdateQueues(updateQueues: List<UpdateQueueEntity>) {
+        updateQueueDao.insertUpdateQueues(updateQueues)
+    }
+
+    suspend fun deleteUpdateQueueByNcode(ncode: String) {
+        updateQueueDao.deleteUpdateQueueByNcode(ncode)
     }
 }

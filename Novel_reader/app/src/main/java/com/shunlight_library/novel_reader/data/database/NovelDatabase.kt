@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import com.shunlight_library.novel_reader.data.dao.EpisodeDao
 import com.shunlight_library.novel_reader.data.dao.LastReadNovelDao
 import com.shunlight_library.novel_reader.data.dao.NovelDescDao
+import com.shunlight_library.novel_reader.data.dao.UpdateQueueDao
 import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
@@ -24,6 +25,7 @@ abstract class NovelDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
     abstract fun novelDescDao(): NovelDescDao
     abstract fun lastReadNovelDao(): LastReadNovelDao
+    abstract fun updateQueueDao(): UpdateQueueDao
 
     companion object {
         @Volatile
