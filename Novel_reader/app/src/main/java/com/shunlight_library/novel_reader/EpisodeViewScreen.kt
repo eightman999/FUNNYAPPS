@@ -36,6 +36,9 @@ fun EpisodeViewScreen(
 
     // テキスト表示サイズ（後で設定から取得できるようになると良い）
     var fontSize by remember { mutableStateOf(18) }
+    fun String.removeHtmlTags(): String {
+        return this.replace(Regex("<[^>]*>"), "")
+    }
 
     LaunchedEffect(ncode, episodeNo) {
         scope.launch {
@@ -190,7 +193,7 @@ fun EpisodeViewScreen(
 
                 // 本文
                 Text(
-                    text = episode!!.body,
+                    text = episode!!.body.removeHtmlTags(),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 16.sp
                     ),
