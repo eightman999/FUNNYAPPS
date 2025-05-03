@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreenUpdated(
@@ -48,6 +49,11 @@ fun SettingsScreenUpdated(
     var textOrientation by remember { mutableStateOf("Horizontal") }
     var selfServerPath by remember { mutableStateOf("") }
 
+    // 新しい状態変数を追加
+    var fontColor by remember { mutableStateOf("#000000") }
+    var episodeBackgroundColor by remember { mutableStateOf("#FFFFFF") }
+    var useDefaultBackground by remember { mutableStateOf(true) }
+
     // データベース同期関連の状態変数
     var showDBSyncDialog by remember { mutableStateOf(false) }
     var selectedDbUri by remember { mutableStateOf<Uri?>(null) }
@@ -62,8 +68,6 @@ fun SettingsScreenUpdated(
     var showUpdateDate by remember { mutableStateOf(true) }
     var showEpisodeCount by remember { mutableStateOf(true) }
 
-
-
     // Load saved preferences when the screen is created
     LaunchedEffect(key1 = true) {
         themeMode = settingsStore.themeMode.first()
@@ -73,6 +77,11 @@ fun SettingsScreenUpdated(
         selfServerAccess = settingsStore.selfServerAccess.first()
         textOrientation = settingsStore.textOrientation.first()
         selfServerPath = settingsStore.selfServerPath.first()
+
+        // 新しい設定値の読み込み
+        fontColor = settingsStore.fontColor.first()
+        episodeBackgroundColor = settingsStore.episodeBackgroundColor.first()
+        useDefaultBackground = settingsStore.useDefaultBackground.first()
 
         // 表示設定の読み込み
         val displaySettings = settingsStore.getDisplaySettings()
@@ -85,7 +94,6 @@ fun SettingsScreenUpdated(
         showEpisodeCount = displaySettings.showEpisodeCount
     }
 
-    // データベース同期ダイアログ
     // データベース同期ダイアログ
     if (showDBSyncDialog && selectedDbUri != null) {
         AlertDialog(
@@ -179,7 +187,7 @@ fun SettingsScreenUpdated(
         "Black" to Color(0xFF000000)
     )
 
-// フォントカラーの選択肢
+    // フォントカラーの選択肢
     val fontColorOptions = listOf("Black", "Dark Gray", "Navy", "Dark Green", "White")
     val fontColors = mapOf(
         "Black" to "#000000",
@@ -369,9 +377,6 @@ fun SettingsScreenUpdated(
                         )
                     }
 
-                    // 他の表示設定も同様に実装
-                    // ...
-
                     // 作者表示設定
                     Row(
                         modifier = Modifier
@@ -417,8 +422,50 @@ fun SettingsScreenUpdated(
                         )
                     }
 
-                    // 他の表示設定も同様に追加
-                    // ...
+                    // 評価表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("評価を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showRating,
+                            onCheckedChange = { showRating = it }
+                        )
+                    }
+
+                    // 更新日表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("更新日を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showUpdateDate,
+                            onCheckedChange = { showUpdateDate = it }
+                        )
+                    }
+
+                    // エピソード数表示設定
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("エピソード数を表示")
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = showEpisodeCount,
+                            onCheckedChange = { showEpisodeCount = it }
+                        )
+                    }
                 }
             }
 
@@ -439,6 +486,8 @@ fun SettingsScreenUpdated(
             }
 
             HorizontalDivider()
+
+            // 小説表示設定セクションを追加
             SettingSection(title = "小説表示設定") {
                 // 背景色設定
                 Text(
@@ -466,30 +515,29 @@ fun SettingsScreenUpdated(
                 if (!useDefaultBackground) {
                     backgroundOptions.forEach { option ->
                         if (option != "Default") { // "Default"は上のスイッチで制御するので除外
+                            val colorHex = when (option) {
+                                "White" -> "#FFFFFF"
+                                "Cream" -> "#F5F5DC"
+                                "Light Gray" -> "#EEEEEE"
+                                "Light Blue" -> "#E6F2FF"
+                                "Dark Gray" -> "#303030"
+                                "Black" -> "#000000"
+                                else -> "#FFFFFF"
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .selectable(
-                                        selected = episodeBackgroundColor == backgroundColors[option].toString(),
-                                        onClick = {
-                                            val colorHex = when (option) {
-                                                "White" -> "#FFFFFF"
-                                                "Cream" -> "#F5F5DC"
-                                                "Light Gray" -> "#EEEEEE"
-                                                "Light Blue" -> "#E6F2FF"
-                                                "Dark Gray" -> "#303030"
-                                                "Black" -> "#000000"
-                                                else -> "#FFFFFF"
-                                            }
-                                            episodeBackgroundColor = colorHex
-                                        }
+                                        selected = episodeBackgroundColor == colorHex,
+                                        onClick = { episodeBackgroundColor = colorHex }
                                     )
                                     .padding(horizontal = 16.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
-                                    selected = episodeBackgroundColor == backgroundColors[option].toString(),
-                                    onClick = null // null because we're handling click on the row
+                                    selected = episodeBackgroundColor == colorHex,
+                                    onClick = null
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Text(option)
@@ -498,7 +546,11 @@ fun SettingsScreenUpdated(
                                     modifier = Modifier
                                         .size(24.dp)
                                         .background(
-                                            color = backgroundColors[option] ?: Color.White
+                                            color = try {
+                                                Color(android.graphics.Color.parseColor(colorHex))
+                                            } catch (e: Exception) {
+                                                Color.White
+                                            }
                                         )
                                 )
                             }
@@ -515,19 +567,20 @@ fun SettingsScreenUpdated(
                 )
 
                 fontColorOptions.forEach { option ->
+                    val colorHex = fontColors[option] ?: "#000000"
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .selectable(
-                                selected = fontColor == fontColors[option],
-                                onClick = { fontColor = fontColors[option] ?: "#000000" }
+                                selected = fontColor == colorHex,
+                                onClick = { fontColor = colorHex }
                             )
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = fontColor == fontColors[option],
-                            onClick = null // null because we're handling click on the row
+                            selected = fontColor == colorHex,
+                            onClick = null
                         )
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(option)
@@ -537,7 +590,7 @@ fun SettingsScreenUpdated(
                                 .size(24.dp)
                                 .background(
                                     color = try {
-                                        Color(android.graphics.Color.parseColor(fontColors[option]))
+                                        Color(android.graphics.Color.parseColor(colorHex))
                                     } catch (e: Exception) {
                                         Color.Black
                                     }
@@ -547,9 +600,9 @@ fun SettingsScreenUpdated(
                 }
             }
 
-            // データベース同期セクション（自己サーバー設定とは別）
+            HorizontalDivider()
 
-            // データベース同期セクション（自己サーバー設定とは別）
+            // データベース同期セクション
             SettingSection(title = "データベース同期") {
                 Text(
                     text = "外部のSQLiteデータベースと内部データベースを同期します。",
@@ -580,6 +633,7 @@ fun SettingsScreenUpdated(
                     Text("詳細な同期画面を開く")
                 }
             }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // Save Button
