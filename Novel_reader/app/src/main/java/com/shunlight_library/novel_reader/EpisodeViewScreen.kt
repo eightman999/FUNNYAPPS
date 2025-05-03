@@ -262,7 +262,7 @@ fun EpisodeViewScreen(
 
                             Divider()
 
-                            
+
                         }
                     } else {
                         // 通常モード: WebViewでHTML表示
@@ -455,34 +455,31 @@ fun HtmlRubyWebView(
 
     // ルビ用のCSSスタイルを定義
     val cssStyle = """
-        <style>
-            body {
-                font-family: sans-serif;
-                font-size: ${fontSize}px;
-                line-height: 1.8;
-                padding: 16px;
-                margin: 0;
-                background-color: #ffffff;
-                color: #000000;
-            }
-            ruby {
-                ruby-align: center;
-                ruby-position: over;
-                -webkit-ruby-position: over;
-            }
-            rt {
-                font-size: ${rubyFontSize}px;
-                text-align: center;
-                line-height: 1;
-                display: block;
-                color: #000000;
-            }
-            /* タップエリアを広げる */
-            p, div {
-                padding: 8px 0;
-            }
-        </style>
-    """.trimIndent()
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: ${fontSize}px;
+            line-height: 1.8;
+            padding: 16px;
+            margin: 0;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        ruby {
+            ruby-align: center;
+            display: inline-flex;
+            flex-direction: column-reverse;
+            vertical-align: bottom;
+        }
+        rt {
+            font-size: ${rubyFontSize}px;
+            text-align: center;
+            line-height: 1;
+            color: #000000;
+            display: inline;  /* blockからinlineに変更 */
+        }
+    </style>
+""".trimIndent()
 
     // JavaScriptで追加の調整
     val jsScript = """
