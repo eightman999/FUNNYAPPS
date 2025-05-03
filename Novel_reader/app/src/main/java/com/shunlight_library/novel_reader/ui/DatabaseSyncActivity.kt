@@ -27,11 +27,12 @@ import androidx.lifecycle.lifecycleScope
 import com.shunlight_library.novel_reader.data.sync.ImprovedDatabaseSyncManager
 import com.shunlight_library.novel_reader.ui.theme.Novel_readerTheme
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.background
 
 class DatabaseSyncActivity : ComponentActivity() {
 
     companion object {
-        private const val TAG = "DatabaseSyncActivity"
+        const val TAG = "DatabaseSyncActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

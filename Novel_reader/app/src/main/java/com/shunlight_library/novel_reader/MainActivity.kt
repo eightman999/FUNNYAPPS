@@ -154,7 +154,7 @@ fun NovelReaderApp() {
         }
 
         showSettings -> {
-            SettingsScreen(onBack = { showSettings = false })
+            SettingsScreenUpdated(onBack = { showSettings = false })
         }
         showNovelList -> {
             NovelListScreen(
