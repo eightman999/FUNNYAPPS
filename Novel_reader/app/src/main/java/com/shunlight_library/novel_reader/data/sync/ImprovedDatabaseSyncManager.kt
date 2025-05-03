@@ -384,12 +384,18 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             ))
 
             // novels_descsから順にncodeを取得
+            val ncodeColumnName = if (isColumnExists(externalDb, "novels_descs", "ncode")) {
+                "ncode"
+            } else {
+                "n_code"
+            }
+
             externalDb.query(
                 "novels_descs",
-                arrayOf("ncode", "title"),
+                arrayOf(ncodeColumnName, "title"),
                 null, null, null, null, null
             ).use { ncodeCursor ->
-                val ncodeIndex = ncodeCursor.getColumnIndexOrThrow("ncode")
+                val ncodeIndex = ncodeCursor.getColumnIndexOrThrow(ncodeColumnName)
                 val titleIndex = ncodeCursor.getColumnIndexOrThrow("title")
 
                 var novelCount = 0
@@ -582,6 +588,17 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             throw e
         } finally {
             cursor?.close()
+        }
+    }
+    private fun isColumnExists(db: SQLiteDatabase, tableName: String, columnName: String): Boolean {
+        return db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == columnName) {
+                    return@use true
+                }
+            }
+            false
         }
     }
 }
