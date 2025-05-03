@@ -26,7 +26,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.AnnotatedString
 import android.text.Html
 import android.os.Build
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.viewinterop.AndroidView
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -236,22 +241,38 @@ fun EpisodeViewScreen(
                 )
 
                 // 本文表示 (開発者モードに応じて表示を切り替え)
-                if (devModeEnabled) {
-                    // 開発者モード: 生のHTMLデータをそのまま表示
-                    Text(
-                        text = episode!!.body,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = fontSize.sp
-                        ),
-                        modifier = Modifier.padding(bottom = 32.dp)
-                    )
-                } else {
-                    // 通常モード: Ruby処理を行った表示
-                    RubyText(
-                        text = episode!!.body,
-                        fontSize = fontSize,
-                        modifier = Modifier.padding(bottom = 32.dp)
-                    )
+                // エピソード本文の表示部分を修正
+                // エピソード本文の表示部分を修正
+                if (episode != null) {
+                    if (devModeEnabled) {
+                        // 開発者モード: HTMLソースを表示
+                        Column {
+                            Text(
+                                text = "HTML Source:",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = episode!!.body,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = fontSize.sp
+                                ),
+                                modifier = Modifier.padding(bottom = 32.dp)
+                            )
+
+                            Divider()
+
+                            
+                        }
+                    } else {
+                        // 通常モード: WebViewでHTML表示
+                        HtmlRubyWebView(
+                            htmlContent = episode!!.body,
+                            fontSize = fontSize,
+                            rubyFontSize = (fontSize * 0.6).toInt(),
+                            modifier = Modifier.padding(bottom = 32.dp)
+                        )
+                    }
                 }
             }
         } else {
@@ -394,5 +415,153 @@ fun RubyText(
         style = MaterialTheme.typography.bodyMedium.copy(
             fontSize = fontSize.sp
         )
+    )
+}
+
+@Composable
+fun HtmlRubyWebView(
+    htmlContent: String,
+    modifier: Modifier = Modifier,
+    fontSize: Int = 18,
+    rubyFontSize: Int = 10
+) {
+    val context = LocalContext.current
+
+    // HTMLを修正する関数
+    fun fixRubyTags(html: String): String {
+        // パターン1: <ruby>対象</rb>(ルビ) の修正
+        var fixed = html.replace("<ruby>([^<]*?)</rb>\\(([^)]*?)\\)".toRegex()) {
+            val base = it.groupValues[1]
+            val ruby = it.groupValues[2]
+            "<ruby>$base<rt>$ruby</rt></ruby>"
+        }
+
+        // パターン2: <ruby>対象(ルビ) の修正
+        fixed = fixed.replace("<ruby>([^<(]*?)\\(([^)]*?)\\)".toRegex()) {
+            val base = it.groupValues[1]
+            val ruby = it.groupValues[2]
+            "<ruby>$base<rt>$ruby</rt></ruby>"
+        }
+
+        // パターン3: 対象(ルビ) パターンをrubyタグに変換
+        fixed = fixed.replace("([^<>\\s]+?)\\(([^)]+?)\\)".toRegex()) {
+            val base = it.groupValues[1]
+            val ruby = it.groupValues[2]
+            "<ruby>$base<rt>$ruby</rt></ruby>"
+        }
+
+        return fixed
+    }
+
+    // ルビ用のCSSスタイルを定義
+    val cssStyle = """
+        <style>
+            body {
+                font-family: sans-serif;
+                font-size: ${fontSize}px;
+                line-height: 1.8;
+                padding: 16px;
+                margin: 0;
+                background-color: #ffffff;
+                color: #000000;
+            }
+            ruby {
+                ruby-align: center;
+                ruby-position: over;
+                -webkit-ruby-position: over;
+            }
+            rt {
+                font-size: ${rubyFontSize}px;
+                text-align: center;
+                line-height: 1;
+                display: block;
+                color: #000000;
+            }
+            /* タップエリアを広げる */
+            p, div {
+                padding: 8px 0;
+            }
+        </style>
+    """.trimIndent()
+
+    // JavaScriptで追加の調整
+    val jsScript = """
+        <script>
+            // ドキュメント読み込み後にルビタグを調整
+            document.addEventListener('DOMContentLoaded', function() {
+                // すべてのルビ要素を取得
+                var rubyElements = document.getElementsByTagName('ruby');
+                for (var i = 0; i < rubyElements.length; i++) {
+                    var ruby = rubyElements[i];
+                    
+                    // rtタグが見つからない場合は修正
+                    if (ruby.getElementsByTagName('rt').length === 0) {
+                        var text = ruby.textContent;
+                        var match = text.match(/(.+?)\((.+?)\)/);
+                        if (match) {
+                            ruby.innerHTML = match[1] + '<rt>' + match[2] + '</rt>';
+                        }
+                    }
+                }
+            });
+        </script>
+    """.trimIndent()
+
+    // HTMLを修正
+    val fixedHtml = fixRubyTags(htmlContent)
+
+    // HTMLコンテンツを整形
+    val formattedHtml = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+            $cssStyle
+            $jsScript
+        </head>
+        <body>
+            $fixedHtml
+        </body>
+        </html>
+    """.trimIndent()
+
+    // WebViewでHTMLをレンダリング
+    var webView: WebView? = null
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                webView = this
+                settings.apply {
+                    javaScriptEnabled = true
+                    defaultFontSize = fontSize
+                    builtInZoomControls = true
+                    displayZoomControls = false
+
+                    // キャッシュを使用
+                    cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+
+                    // 文字コードを明示
+                    defaultTextEncodingName = "UTF-8"
+                }
+
+                // WebViewClientのカスタマイズ
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        // ページ読み込み完了後の処理
+                    }
+                }
+
+                // HTMLをロード
+                loadDataWithBaseURL(null, formattedHtml, "text/html", "UTF-8", null)
+            }
+        },
+        update = { view ->
+            // コンポーネントの更新が必要な場合
+            view.loadDataWithBaseURL(null, formattedHtml, "text/html", "UTF-8", null)
+        },
+        modifier = modifier.fillMaxSize()
     )
 }
