@@ -33,6 +33,7 @@ fun EpisodeViewScreen(
 
     var episode by remember { mutableStateOf<EpisodeEntity?>(null) }
     var novel by remember { mutableStateOf<NovelDescEntity?>(null) }
+    val scrollState = rememberScrollState()
 
     // テキスト表示サイズ（後で設定から取得できるようになると良い）
     var fontSize by remember { mutableStateOf(18) }
@@ -41,6 +42,7 @@ fun EpisodeViewScreen(
     }
 
     LaunchedEffect(ncode, episodeNo) {
+        scrollState.scrollTo(0)
         scope.launch {
             try {
                 // エピソード情報の取得
