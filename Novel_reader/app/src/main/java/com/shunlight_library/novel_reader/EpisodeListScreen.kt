@@ -39,6 +39,9 @@ fun EpisodeListScreen(
     var episodes by remember { mutableStateOf<List<EpisodeEntity>>(emptyList()) }
     var lastRead by remember { mutableStateOf<LastReadNovelEntity?>(null) }
 
+    // 折りたたみ状態の追加
+    var isDescriptionExpanded by remember { mutableStateOf(true) }
+
     // タグ編集用の状態変数
     var showTagEditDialog by remember { mutableStateOf(false) }
     var mainTag by remember { mutableStateOf("") }
@@ -59,33 +62,13 @@ fun EpisodeListScreen(
         }
     }
 
-// EpisodeListScreen.kt内のLaunchedEffect部分の修正
-
     LaunchedEffect(ncode) {
         // エピソード一覧の取得（Flow型なのでLaunchedEffectで直接collect可能）
         repository.getEpisodesByNcode(ncode).collect { episodeList ->
-            episodes = episodeList
-        }
-    }
-
-// 小説情報と最後に読んだ情報の取得（suspend関数なのでCoroutineScopeが必要）
-    LaunchedEffect(ncode) {
-        scope.launch {
-            try {
-                // 小説情報の取得
-                novel = repository.getNovelByNcode(ncode)
-
-                // 最後に読んだ情報の取得
-                lastRead = repository.getLastReadByNcode(ncode)
-
-                // 初期タグ値の設定
-                novel?.let {
-                    mainTag = it.main_tag
-                    subTag = it.sub_tag
-                }
-            } catch (e: Exception) {
-                Log.e("EpisodeListScreen", "データ取得エラー: ${e.message}")
-            }
+            // エピソードリストを数値順にソート
+            episodes = episodeList.sortedWith(compareBy {
+                it.episode_no.toIntOrNull() ?: Int.MAX_VALUE
+            })
         }
     }
 
@@ -111,8 +94,6 @@ fun EpisodeListScreen(
                     )
                 }
             },
-// EpisodeListScreen.kt内のタグ編集ダイアログの修正
-
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -196,9 +177,6 @@ fun EpisodeListScreen(
                     }
 
                     // しおりを削除
-                    // EpisodeListScreen.kt内の「しおりを削除」ボタン部分の修正
-
-// しおりを削除
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -268,12 +246,13 @@ fun EpisodeListScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // 小説情報のヘッダー部分
+            // 小説情報のヘッダー部分 - 折りたたみ機能追加
             novel?.let { novel ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .clickable { isDescriptionExpanded = !isDescriptionExpanded },
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
@@ -281,43 +260,65 @@ fun EpisodeListScreen(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
-                        // あらすじ
-                        Text(
-                            text = "あらすじ",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = novel.Synopsis,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // タグ
-                        if (novel.main_tag.isNotEmpty() || novel.sub_tag.isNotEmpty()) {
+                        // 折りたたみボタンとタイトル
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text(
-                                text = "タグ",
+                                text = "あらすじとタグ",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(
+                                imageVector = if (isDescriptionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isDescriptionExpanded) "折りたたむ" else "展開する"
+                            )
+                        }
+
+                        // 折りたたみ部分の内容
+                        if (isDescriptionExpanded) {
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // あらすじ
+                            Text(
+                                text = "あらすじ",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = buildString {
-                                    append(novel.main_tag)
-                                    if (novel.sub_tag.isNotEmpty()) {
-                                        if (novel.main_tag.isNotEmpty()) {
-                                            append(", ")
-                                        }
-                                        append(novel.sub_tag)
-                                    }
-                                },
+                                text = novel.Synopsis,
                                 style = MaterialTheme.typography.bodySmall
                             )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // タグ
+                            if (novel.main_tag.isNotEmpty() || novel.sub_tag.isNotEmpty()) {
+                                Text(
+                                    text = "タグ",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = buildString {
+                                        append(novel.main_tag)
+                                        if (novel.sub_tag.isNotEmpty()) {
+                                            if (novel.main_tag.isNotEmpty()) {
+                                                append(", ")
+                                            }
+                                            append(novel.sub_tag)
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         }
 
-                        // 最終更新日と総話数
+                        // 最終更新日と総話数（常に表示）
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -333,7 +334,7 @@ fun EpisodeListScreen(
                             )
                         }
 
-                        // 最後に読んだ情報
+                        // 最後に読んだ情報（常に表示）
                         lastRead?.let {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
