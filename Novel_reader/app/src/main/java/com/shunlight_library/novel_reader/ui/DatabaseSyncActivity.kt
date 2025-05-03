@@ -67,7 +67,13 @@ fun DatabaseSyncScreen(
     // 追加の状態変数
     var currentCount by remember { mutableStateOf(0) }
     var totalCount by remember { mutableStateOf(0) }
+    // ログメッセージに関する状態変数を修正
+    val maxLogMessages = 150 // 最大ログ表示数
 
+    // ログ追加用のヘルパー関数
+    fun addLog(message: String) {
+        logMessages = (logMessages + message).takeLast(maxLogMessages)
+    }
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -83,12 +89,12 @@ fun DatabaseSyncScreen(
                 try {
                     contentResolver.takePersistableUriPermission(uri, takeFlags)
                     Log.d(DatabaseSyncActivity.TAG, "取得した永続的なアクセス権限: $path")
-                    logMessages = logMessages + "データベースファイルを選択しました: $path"
+                    addLog("データベースファイルを選択しました: $path")
                     Toast.makeText(context, "データベースファイルを選択しました", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Log.e(DatabaseSyncActivity.TAG, "権限取得エラー: ${e.message}", e)
                     Toast.makeText(context, "アクセス権限の取得中にエラーが発生しました", Toast.LENGTH_SHORT).show()
-                    logMessages = logMessages + "エラー: アクセス権限の取得に失敗しました"
+                    addLog("エラー: アクセス権限の取得に失敗しました")
                 }
             }
         }
@@ -105,7 +111,7 @@ fun DatabaseSyncScreen(
         syncStep = "準備中"
         syncMessage = "同期を開始しています..."
         syncResult = null
-        logMessages = logMessages + "同期を開始しています..."
+        addLog("同期を開始しています...")
 
         scope.launch {
             val syncManager = ImprovedDatabaseSyncManager(context)
@@ -135,7 +141,7 @@ fun DatabaseSyncScreen(
                                 }
                             }
 
-                            logMessages = logMessages + logMsg
+                            addLog(logMsg)
                         }
 
                         override fun onComplete(result: ImprovedDatabaseSyncManager.SyncResult) {
@@ -145,10 +151,10 @@ fun DatabaseSyncScreen(
                             if (result.success) {
                                 val successMsg = "同期が完了しました: 小説${result.novelDescsCount}件、" +
                                         "エピソード${result.episodesCount}件、履歴${result.lastReadCount}件"
-                                logMessages = logMessages + "完了: $successMsg"
+                                addLog("完了: $successMsg")
                             } else {
                                 val errorMsg = "同期に失敗しました: ${result.errorMessage}"
-                                logMessages = logMessages + "エラー: $errorMsg"
+                                addLog("エラー: $errorMsg")
                             }
                         }
                     }
@@ -163,7 +169,7 @@ fun DatabaseSyncScreen(
                     errorMessage = "予期しないエラー: ${e.message}"
                 )
                 isSyncing = false
-                logMessages = logMessages + "重大なエラー: ${e.message}"
+                addLog("重大なエラー: ${e.message}")
             }
         }
     }

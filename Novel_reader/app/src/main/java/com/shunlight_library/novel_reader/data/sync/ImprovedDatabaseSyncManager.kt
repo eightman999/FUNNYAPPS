@@ -15,6 +15,7 @@ import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils.getStringS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.abs
 
 /**
  * 内部RoomデータベースとSDカード上のSQLiteデータベースを同期するための改良版マネージャクラス
@@ -28,6 +29,15 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
     private val repository: NovelRepository = NovelReaderApplication.getRepository()
     private val sqliteHelper = ExternalSQLiteHelper(context)
     private var syncCallback: SyncProgressCallback? = null
+
+    // 進捗更新のスロットリングのための変数を追加
+    private var lastProgressUpdateTime = 0L
+    private val minUpdateIntervalMs = 250 // 最小更新間隔（ミリ秒）
+    private val progressThreshold = 0.01f // 進捗更新の閾値（1%）
+
+    // 前回の進捗状態を保持
+    private var lastProgress: SyncProgress? = null
+
     /**
      * 同期プロセスの進行状況を表すデータクラス
      */
@@ -213,18 +223,35 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
     }
 
     /**
-     * 進行状況をコールバックに通知します
+     * 進行状況をコールバックに通知します（スロットリング機能付き）
      */
     private fun updateProgress(callback: SyncProgressCallback?, progress: SyncProgress) {
-        syncCallback?.onProgressUpdate(progress)
+        val currentTime = System.currentTimeMillis()
 
-        // ログに小説情報も表示
-        val novelInfo = if (progress.currentNcode.isNotEmpty() && progress.currentTitle.isNotEmpty())
-            "[${progress.currentNcode}] ${progress.currentTitle}"
-        else ""
+        // 以下の条件のいずれかが真の場合に更新を送信:
+        // 1. 前回の更新から最小間隔以上経過している
+        // 2. ステップが変わった
+        // 3. 進捗が閾値以上変化した
+        // 4. 最初または最後の更新
+        val shouldUpdate =
+            lastProgress == null || // 初回更新
+                    currentTime - lastProgressUpdateTime >= minUpdateIntervalMs || // 時間間隔
+                    lastProgress?.step != progress.step || // ステップ変更
+                    abs(lastProgress?.progress ?: 0f - progress.progress) >= progressThreshold || // 進捗変化
+                    progress.progress >= 1.0f || progress.step == SyncStep.ERROR // 最終更新またはエラー
 
-        Log.d(TAG, "[${progress.step}] ${progress.message} $novelInfo (${progress.progress * 100}%)")
+        if (shouldUpdate) {
+            syncCallback?.onProgressUpdate(progress)
+            lastProgressUpdateTime = currentTime
+            lastProgress = progress
 
+            // ログに小説情報も表示
+            val novelInfo = if (progress.currentNcode.isNotEmpty() && progress.currentTitle.isNotEmpty())
+                "[${progress.currentNcode}] ${progress.currentTitle}"
+            else ""
+
+            Log.d(TAG, "[${progress.step}] ${progress.message} $novelInfo (${progress.progress * 100}%)")
+        }
     }
 
     /**
@@ -303,8 +330,8 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
                     step = SyncStep.SYNCING_NOVEL_DESCS,
                     message = "小説情報を同期中 ($count/$totalCount - $progressPercent%)",
                     progress = 0.3f + (0.3f * progressValue),
-                    currentNcode = columnNcode.toString(),
-                    currentTitle = columnTitle.toString(),
+                    currentNcode = getStringSafely(cursor, columnNcode),
+                    currentTitle = getStringSafely(cursor, columnTitle),
                     currentCount = count,
                     totalCount = totalCount
                 ))
