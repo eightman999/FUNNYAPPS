@@ -95,6 +95,16 @@ fun NovelReaderApp() {
             novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
         }
     }
+    // 画面状態変数をキーとしたLaunchedEffectで、メイン画面に戻るたびに最新情報を更新
+    LaunchedEffect(showSettings, showWebView, showNovelList, showEpisodeList, showEpisodeView) {
+        if (!showSettings && !showWebView && !showNovelList && !showEpisodeList && !showEpisodeView) {
+            // メイン画面に戻ってきたときに最新の情報を取得
+            lastReadNovel = repository.getMostRecentlyReadNovel()
+            if (lastReadNovel != null) {
+                novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
+            }
+        }
+    }
 
     // R18コンテンツ選択ダイアログ
     if (showR18Dialog) {
@@ -187,7 +197,9 @@ fun NovelReaderApp() {
             )
         }
         showEpisodeView -> {
+
             EpisodeViewScreen(
+
                 ncode = currentNcode,
                 episodeNo = currentEpisodeNo,
                 onBack = {
@@ -266,8 +278,15 @@ fun NovelReaderApp() {
 
                             // 最後に読んだ小説の情報をボタンに変更
                             Button(
-                                onClick = { /* TODO: 最後に読んだ小説の続きを開く */ },
-                                enabled = novelInfo != null, // 小説情報がある場合のみ有効化
+                                onClick = {
+                                    if (lastReadNovel != null) {
+                                        // 最後に読んだエピソードを開く
+                                        currentNcode = lastReadNovel!!.ncode
+                                        currentEpisodeNo = lastReadNovel!!.episode_no.toString()
+                                        showEpisodeView = true
+                                    }
+                                },
+                                enabled = novelInfo != null,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
                                     contentColor = if (novelInfo != null) LightOrange else Color.Gray,
