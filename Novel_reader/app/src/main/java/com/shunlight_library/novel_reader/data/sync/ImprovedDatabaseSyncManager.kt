@@ -5,21 +5,16 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
-
 import com.shunlight_library.novel_reader.NovelReaderApplication
 import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
-import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.data.repository.NovelRepository
 import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils.getColumnIndexSafely
 import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils.getIntSafely
 import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils.getStringSafely
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 内部RoomデータベースとSDカード上のSQLiteデータベースを同期するための改良版マネージャクラス
@@ -32,14 +27,18 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
 
     private val repository: NovelRepository = NovelReaderApplication.getRepository()
     private val sqliteHelper = ExternalSQLiteHelper(context)
-
+    private var syncCallback: SyncProgressCallback? = null
     /**
      * 同期プロセスの進行状況を表すデータクラス
      */
     data class SyncProgress(
         val step: SyncStep,
         val message: String,
-        val progress: Float // 0.0f から 1.0f の範囲
+        val progress: Float, // 0.0f から 1.0f の範囲
+        val currentNcode: String = "", // 現在処理中のncode
+        val currentTitle: String = "", // 現在処理中のタイトル
+        val currentCount: Int = 0,    // 現在の処理済み数
+        val totalCount: Int = 0       // 処理対象の総数
     )
 
     /**
@@ -87,7 +86,7 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
         return withContext(Dispatchers.IO) {
             var db: SQLiteDatabase? = null
             var tempFile: File? = null
-
+            syncCallback = callback
             try {
                 // 進行状況の更新: 準備中
                 updateProgress(callback, SyncProgress(
@@ -217,8 +216,15 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
      * 進行状況をコールバックに通知します
      */
     private fun updateProgress(callback: SyncProgressCallback?, progress: SyncProgress) {
-        callback?.onProgressUpdate(progress)
-        Log.d(TAG, "[${progress.step}] ${progress.message} (${progress.progress * 100}%)")
+        syncCallback?.onProgressUpdate(progress)
+
+        // ログに小説情報も表示
+        val novelInfo = if (progress.currentNcode.isNotEmpty() && progress.currentTitle.isNotEmpty())
+            "[${progress.currentNcode}] ${progress.currentTitle}"
+        else ""
+
+        Log.d(TAG, "[${progress.step}] ${progress.message} $novelInfo (${progress.progress * 100}%)")
+
     }
 
     /**
@@ -226,10 +232,15 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
      * @return 同期された小説数
      */
     private suspend fun syncNovelDescs(externalDb: SQLiteDatabase): Int {
+
         var cursor: Cursor? = null
         var count = 0
+        var totalCount = 0
 
         try {
+            // 総レコード数を取得
+            totalCount = sqliteHelper.getTableCount(externalDb, "novels_descs")
+
             // 外部DBから全ての小説説明を取得
             cursor = externalDb.query(
                 "novels_descs",
@@ -242,7 +253,11 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             )
 
             // カラム名の取得とマッピング
-            val columnNcode = cursor.getColumnIndexOrThrow("ncode")
+            val columnNcode = if (cursor.getColumnIndex("ncode") >= 0) {
+                cursor.getColumnIndexOrThrow("ncode")
+            } else {
+                cursor.getColumnIndexOrThrow("n_code")
+            }
             val columnTitle = cursor.getColumnIndexOrThrow("title")
             val columnAuthor = cursor.getColumnIndexOrThrow("author")
 
@@ -281,7 +296,18 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
 
                 novels.add(novel)
                 count++
+                val progressValue = if (totalCount > 0) count.toFloat() / totalCount else 0f
+                val progressPercent = (progressValue * 100).toInt()
 
+                updateProgress(syncCallback, SyncProgress(
+                    step = SyncStep.SYNCING_NOVEL_DESCS,
+                    message = "小説情報を同期中 ($count/$totalCount - $progressPercent%)",
+                    progress = 0.3f + (0.3f * progressValue),
+                    currentNcode = columnNcode.toString(),
+                    currentTitle = columnTitle.toString(),
+                    currentCount = count,
+                    totalCount = totalCount
+                ))
                 // バッチサイズに達したら保存
                 if (novels.size >= batchSize) {
                     repository.insertNovels(novels)
@@ -311,9 +337,22 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
     private suspend fun syncEpisodes(externalDb: SQLiteDatabase): Int {
         var cursor: Cursor? = null
         var count = 0
+        var totalCount = 0
 
         try {
-            // 外部DBから全てのエピソードを取得
+            // 総レコード数を取得
+            totalCount = sqliteHelper.getTableCount(externalDb, "episodes")
+
+            // 進捗初期化の報告
+            updateProgress(syncCallback, SyncProgress(
+                step = SyncStep.SYNCING_EPISODES,
+                message = "エピソードデータの同期を開始 (0/$totalCount - 0%)",
+                progress = 0.6f,
+                currentCount = 0,
+                totalCount = totalCount
+            ))
+
+            // 外部DBからエピソードを取得
             cursor = externalDb.query(
                 "episodes",
                 null,
@@ -325,7 +364,11 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             )
 
             // カラム名の取得とマッピング
-            val columnNcode = cursor.getColumnIndexOrThrow("ncode")
+            val columnNcode = if (cursor.getColumnIndex("ncode") >= 0) {
+                cursor.getColumnIndexOrThrow("ncode")
+            } else {
+                cursor.getColumnIndexOrThrow("n_code")
+            }
             val columnEpisodeNo = cursor.getColumnIndexOrThrow("episode_no")
             val columnBody = cursor.getColumnIndexOrThrow("body")
             val columnETitle = getColumnIndexSafely(cursor, "e_title")
@@ -347,6 +390,18 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
 
                 episodes.add(episode)
                 count++
+                val progressValue = if (totalCount > 0) count.toFloat() / totalCount else 0f
+                val progressPercent = (progressValue * 100).toInt()
+
+                updateProgress(syncCallback, SyncProgress(
+                    step = SyncStep.SYNCING_EPISODES,
+                    message = "エピソードを同期中 ($count/$totalCount - $progressPercent%)",
+                    progress = 0.6f + (0.3f * progressValue),
+                    currentNcode = getStringSafely(cursor, columnNcode),
+                    currentTitle = "第${getStringSafely(cursor, columnEpisodeNo)}話",
+                    currentCount = count,
+                    totalCount = totalCount
+                ))
 
                 // バッチサイズに達したら保存
                 if (episodes.size >= batchSize) {
@@ -377,14 +432,24 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
     private suspend fun syncLastReadNovels(externalDb: SQLiteDatabase): Int {
         var cursor: Cursor? = null
         var count = 0
+        var totalCount = 0
 
         try {
-            // テーブル名が内部DBでは "last_read_novel" だが、外部DBでは違う可能性がある
-            val tableName = "last_read_novel"
+            // 総レコード数を取得
+            totalCount = sqliteHelper.getTableCount(externalDb, "last_read_novel")
 
-            // 外部DBから全ての最終読書記録を取得
+            // 進捗初期化の報告
+            updateProgress(syncCallback, SyncProgress(
+                step = SyncStep.SYNCING_LAST_READ,
+                message = "読書履歴データの同期を開始 (0/$totalCount - 0%)",
+                progress = 0.9f,
+                currentCount = 0,
+                totalCount = totalCount
+            ))
+
+            // 外部DBから最終読書記録を取得
             cursor = externalDb.query(
-                tableName,
+                "last_read_novel",
                 null,
                 null,
                 null,
@@ -394,7 +459,11 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
             )
 
             // カラム名の取得とマッピング
-            val columnNcode = cursor.getColumnIndexOrThrow("ncode")
+            val columnNcode = if (cursor.getColumnIndex("ncode") >= 0) {
+                cursor.getColumnIndexOrThrow("ncode")
+            } else {
+                cursor.getColumnIndexOrThrow("n_code")
+            }
             val columnDate = cursor.getColumnIndexOrThrow("date")
             val columnEpisodeNo = cursor.getColumnIndexOrThrow("episode_no")
 
@@ -406,6 +475,18 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
                 // 既存のデータがあれば更新、なければ新規挿入
                 repository.updateLastRead(ncode, episodeNo)
                 count++
+                val progressValue = if (totalCount > 0) count.toFloat() / totalCount else 0f
+                val progressPercent = (progressValue * 100).toInt()
+
+                updateProgress(syncCallback, SyncProgress(
+                    step = SyncStep.SYNCING_LAST_READ,
+                    message = "読書履歴を同期中 ($count/$totalCount - $progressPercent%)",
+                    progress = 0.9f + (0.1f * progressValue),
+                    currentNcode = ncode,
+                    currentTitle = "最終話: ${episodeNo}話",
+                    currentCount = count,
+                    totalCount = totalCount
+                ))
             }
 
             Log.d(TAG, "最終読書記録の同期が完了しました: $count 件")

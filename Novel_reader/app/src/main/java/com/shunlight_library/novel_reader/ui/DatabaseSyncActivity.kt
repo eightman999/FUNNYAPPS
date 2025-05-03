@@ -64,6 +64,9 @@ fun DatabaseSyncScreen(
     var syncMessage by remember { mutableStateOf("") }
     var syncResult by remember { mutableStateOf<ImprovedDatabaseSyncManager.SyncResult?>(null) }
     var logMessages by remember { mutableStateOf<List<String>>(emptyList()) }
+    // 追加の状態変数
+    var currentCount by remember { mutableStateOf(0) }
+    var totalCount by remember { mutableStateOf(0) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -115,7 +118,24 @@ fun DatabaseSyncScreen(
                             syncProgress = progress.progress
                             syncStep = progress.step.name
                             syncMessage = progress.message
-                            logMessages = logMessages + "${progress.step}: ${progress.message}"
+                            currentCount = progress.currentCount
+                            totalCount = progress.totalCount
+
+                            // ログメッセージの改善
+                            val logMsg = buildString {
+                                append("${progress.step}: ${progress.message}")
+
+                                if (progress.currentNcode.isNotEmpty() && progress.currentTitle.isNotEmpty()) {
+                                    append(" - [${progress.currentNcode}] ${progress.currentTitle}")
+                                }
+
+                                if (progress.totalCount > 0) {
+                                    val percent = (progress.currentCount.toFloat() / progress.totalCount * 100).toInt()
+                                    append(" ($percent%)")
+                                }
+                            }
+
+                            logMessages = logMessages + logMsg
                         }
 
                         override fun onComplete(result: ImprovedDatabaseSyncManager.SyncResult) {
@@ -222,22 +242,54 @@ fun DatabaseSyncScreen(
                     )
 
                     if (isSyncing) {
-                        CircularProgressIndicator(
-                            progress = syncProgress,
-                            modifier = Modifier.size(64.dp)
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(
+                                progress = syncProgress,
+                                modifier = Modifier.size(64.dp)
+                            )
 
-                        Text(
-                            text = syncStep,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Text(
-                            text = syncMessage,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
+                            Text(
+                                text = syncStep,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+
+                            Text(
+                                text = syncMessage,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
+
+                            // テーブルごとの進捗バーを追加（totalCountが0より大きい場合のみ）
+                            if (totalCount > 0) {
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                    text = "テーブル進捗: $currentCount / $totalCount",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                LinearProgressIndicator(
+                                    progress = currentCount.toFloat() / totalCount,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                )
+
+                                Text(
+                                    text = "${(currentCount.toFloat() / totalCount * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    }else {
                         Icon(
                             imageVector = Icons.Default.Sync,
                             contentDescription = null,
@@ -287,6 +339,8 @@ fun DatabaseSyncScreen(
             }
 
             // ログ表示セクション
+            // ログ表示セクションの改善
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -297,10 +351,24 @@ fun DatabaseSyncScreen(
                         .fillMaxSize()
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "ログ",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "同期ログ",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        // ログクリアボタンを追加
+                        TextButton(
+                            onClick = { logMessages = emptyList() },
+                            enabled = logMessages.isNotEmpty()
+                        ) {
+                            Text("クリア")
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -316,9 +384,18 @@ fun DatabaseSyncScreen(
                                 .verticalScroll(rememberScrollState())
                         ) {
                             logMessages.forEach { message ->
+                                // メッセージの種類に応じて色分けを行う
+                                val color = when {
+                                    message.contains("エラー") -> MaterialTheme.colorScheme.error
+                                    message.contains("完了") -> MaterialTheme.colorScheme.primary
+                                    message.contains("SYNCING") -> MaterialTheme.colorScheme.secondary
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+
                                 Text(
                                     text = message,
                                     style = MaterialTheme.typography.bodySmall,
+                                    color = color,
                                     modifier = Modifier.padding(vertical = 2.dp)
                                 )
                             }
