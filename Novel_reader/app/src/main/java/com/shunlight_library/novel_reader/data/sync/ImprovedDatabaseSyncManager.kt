@@ -362,96 +362,155 @@ class ImprovedDatabaseSyncManager(private val context: Context) {
      * @return 同期されたエピソード数
      */
     private suspend fun syncEpisodes(externalDb: SQLiteDatabase): Int {
-        var cursor: Cursor? = null
-        var count = 0
         var totalCount = 0
+        var processedCount = 0
+        val failedNcodes = mutableListOf<Pair<String, String>>() // ncode, errorMessage
 
         try {
-            // 総レコード数を取得
-            totalCount = sqliteHelper.getTableCount(externalDb, "episodes")
+            // 総エピソード数を把握
+            externalDb.rawQuery("SELECT COUNT(*) FROM episodes", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    totalCount = cursor.getInt(0)
+                }
+            }
 
-            // 進捗初期化の報告
+            // 進捗初期化
             updateProgress(syncCallback, SyncProgress(
                 step = SyncStep.SYNCING_EPISODES,
-                message = "エピソードデータの同期を開始 (0/$totalCount - 0%)",
+                message = "エピソードの同期を開始 (0/$totalCount)",
                 progress = 0.6f,
                 currentCount = 0,
                 totalCount = totalCount
             ))
 
-            // 外部DBからエピソードを取得
-            cursor = externalDb.query(
-                "episodes",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-            )
+            // novels_descsから順にncodeを取得
+            externalDb.query(
+                "novels_descs",
+                arrayOf("ncode", "title"),
+                null, null, null, null, null
+            ).use { ncodeCursor ->
+                val ncodeIndex = ncodeCursor.getColumnIndexOrThrow("ncode")
+                val titleIndex = ncodeCursor.getColumnIndexOrThrow("title")
 
-            // カラム名の取得とマッピング
-            val columnNcode = if (cursor.getColumnIndex("ncode") >= 0) {
-                cursor.getColumnIndexOrThrow("ncode")
-            } else {
-                cursor.getColumnIndexOrThrow("n_code")
-            }
-            val columnEpisodeNo = cursor.getColumnIndexOrThrow("episode_no")
-            val columnBody = cursor.getColumnIndexOrThrow("body")
-            val columnETitle = getColumnIndexSafely(cursor, "e_title")
-            val columnUpdateTime = getColumnIndexSafely(cursor, "update_time")
+                var novelCount = 0
+                val totalNovels = ncodeCursor.count
 
-            val batchSize = 50
-            val episodes = mutableListOf<EpisodeEntity>()
+                // 各ncodeについて処理
+                while (ncodeCursor.moveToNext()) {
+                    val ncode = ncodeCursor.getString(ncodeIndex)
+                    val title = ncodeCursor.getString(titleIndex)
+                    novelCount++
 
-            // データの読み取りとバッチ処理
-            while (cursor.moveToNext()) {
-                val episode = EpisodeEntity(
-                    ncode = getStringSafely(cursor, columnNcode),
-                    episode_no = getStringSafely(cursor, columnEpisodeNo),
-                    body = getStringSafely(cursor, columnBody),
-                    e_title = getStringSafely(cursor, columnETitle),
-                    update_time = getStringSafely(cursor, columnUpdateTime,
-                        DatabaseSyncUtils.getCurrentDateTimeString())
-                )
+                    try {
+                        Log.d(TAG, "小説[$novelCount/$totalNovels] \"$title\"($ncode)のエピソードを同期中")
 
-                episodes.add(episode)
-                count++
-                val progressValue = if (totalCount > 0) count.toFloat() / totalCount else 0f
-                val progressPercent = (progressValue * 100).toInt()
+                        // このncodeのエピソードを取得
+                        externalDb.query(
+                            "episodes",
+                            null,
+                            "ncode = ?",
+                            arrayOf(ncode),
+                            null, null, null
+                        ).use { episodeCursor ->
+                            // カラムインデックスを一度だけ取得
+                            val epNcodeIndex = if (episodeCursor.getColumnIndex("ncode") >= 0) {
+                                episodeCursor.getColumnIndexOrThrow("ncode")
+                            } else {
+                                episodeCursor.getColumnIndexOrThrow("n_code")
+                            }
+                            val episodeNoIndex = episodeCursor.getColumnIndexOrThrow("episode_no")
+                            val bodyIndex = episodeCursor.getColumnIndexOrThrow("body")
+                            val eTitleIndex = getColumnIndexSafely(episodeCursor, "e_title")
+                            val updateTimeIndex = getColumnIndexSafely(episodeCursor, "update_time")
 
-                updateProgress(syncCallback, SyncProgress(
-                    step = SyncStep.SYNCING_EPISODES,
-                    message = "エピソードを同期中 ($count/$totalCount - $progressPercent%)",
-                    progress = 0.6f + (0.3f * progressValue),
-                    currentNcode = getStringSafely(cursor, columnNcode),
-                    currentTitle = "第${getStringSafely(cursor, columnEpisodeNo)}話",
-                    currentCount = count,
-                    totalCount = totalCount
-                ))
+                            val batchSize = 20
+                            val episodes = mutableListOf<EpisodeEntity>()
+                            var novelEpisodeCount = 0
 
-                // バッチサイズに達したら保存
-                if (episodes.size >= batchSize) {
-                    repository.insertEpisodes(episodes)
-                    episodes.clear()
+                            // エピソードを処理
+                            while (episodeCursor.moveToNext()) {
+                                val episode = EpisodeEntity(
+                                    ncode = getStringSafely(episodeCursor, epNcodeIndex),
+                                    episode_no = getStringSafely(episodeCursor, episodeNoIndex),
+                                    body = getStringSafely(episodeCursor, bodyIndex),
+                                    e_title = getStringSafely(episodeCursor, eTitleIndex),
+                                    update_time = getStringSafely(episodeCursor, updateTimeIndex,
+                                        DatabaseSyncUtils.getCurrentDateTimeString())
+                                )
+
+                                episodes.add(episode)
+                                processedCount++
+                                novelEpisodeCount++
+
+                                // バッチサイズに達したら保存し、メモリ解放
+                                if (episodes.size >= batchSize) {
+                                    repository.insertEpisodes(episodes)
+                                    episodes.clear()
+
+                                    // 進捗更新（バッチごと）
+                                    updateProgress(syncCallback, SyncProgress(
+                                        step = SyncStep.SYNCING_EPISODES,
+                                        message = "小説[$novelCount/$totalNovels] \"$title\"のエピソードを同期中 ($processedCount/$totalCount)",
+                                        progress = 0.6f + (0.3f * processedCount.toFloat() / totalCount),
+                                        currentNcode = ncode,
+                                        currentTitle = title,
+                                        currentCount = processedCount,
+                                        totalCount = totalCount
+                                    ))
+                                }
+                            }
+
+                            // 残りのエピソードを保存
+                            if (episodes.isNotEmpty()) {
+                                repository.insertEpisodes(episodes)
+                                episodes.clear()
+                            }
+
+                            Log.d(TAG, "小説「$title」($ncode)の${novelEpisodeCount}件のエピソードを同期しました")
+                        }
+
+                        // この小説の同期完了を報告
+                        updateProgress(syncCallback, SyncProgress(
+                            step = SyncStep.SYNCING_EPISODES,
+                            message = "小説[$novelCount/$totalNovels] \"$title\"の同期完了 ($processedCount/$totalCount)",
+                            progress = 0.6f + (0.3f * processedCount.toFloat() / totalCount),
+                            currentNcode = ncode,
+                            currentTitle = title,
+                            currentCount = processedCount,
+                            totalCount = totalCount
+                        ))
+                    } catch (e: Exception) {
+                        // この小説の処理中のエラーを記録し、次の小説に進む
+                        Log.e(TAG, "小説「$title」($ncode)のエピソード同期中にエラーが発生しました", e)
+                        failedNcodes.add(Pair(ncode, e.message ?: "不明なエラー"))
+
+                        // エラー進捗を報告
+                        updateProgress(syncCallback, SyncProgress(
+                            step = SyncStep.SYNCING_EPISODES,
+                            message = "小説「$title」($ncode)のエピソード同期でエラー: ${e.message}",
+                            progress = 0.6f + (0.3f * processedCount.toFloat() / totalCount),
+                            currentNcode = ncode,
+                            currentTitle = title,
+                            currentCount = processedCount,
+                            totalCount = totalCount
+                        ))
+                    }
                 }
             }
 
-            // 残りのデータを保存
-            if (episodes.isNotEmpty()) {
-                repository.insertEpisodes(episodes)
+            // 失敗した小説があれば記録
+            if (failedNcodes.isNotEmpty()) {
+                val failedMsg = failedNcodes.joinToString("\n") { "${it.first}: ${it.second}" }
+                Log.w(TAG, "一部の小説のエピソード同期に失敗しました:\n$failedMsg")
             }
 
-            Log.d(TAG, "エピソードの同期が完了しました: $count 件")
-            return count
+            Log.d(TAG, "全小説のエピソード同期が完了しました: 成功${processedCount}件, 失敗${failedNcodes.size}件")
+            return processedCount
         } catch (e: Exception) {
-            Log.e(TAG, "エピソードの同期中にエラーが発生しました", e)
+            Log.e(TAG, "エピソード同期の全体処理中にエラーが発生しました", e)
             throw e
-        } finally {
-            cursor?.close()
         }
     }
-
     /**
      * 最後に読んだ小説のデータを同期します
      * @return 同期された記録数
