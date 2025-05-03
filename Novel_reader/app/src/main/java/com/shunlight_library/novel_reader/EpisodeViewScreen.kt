@@ -45,8 +45,15 @@ fun EpisodeViewScreen(
     var novel by remember { mutableStateOf<NovelDescEntity?>(null) }
     val scrollState = rememberScrollState()
 
+    // 開発者モード関連の状態
+    var titleTapCount by remember { mutableStateOf(0) }
+    var lastTapTime by remember { mutableStateOf(0L) }
+    var devModeEnabled by remember { mutableStateOf(false) }
+    val tapTimeThreshold = 1000 // 連続タップと判定する時間間隔（ミリ秒）
+
     // テキスト表示サイズ（後で設定から取得できるようになると良い）
     var fontSize by remember { mutableStateOf(18) }
+
     fun String.removeHtmlTags(): String {
         return this.replace(Regex("<[^>]*>"), "")
     }
@@ -68,6 +75,28 @@ fun EpisodeViewScreen(
         }
     }
 
+    // タイトルをタップした時の処理関数
+    fun onTitleTap() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastTapTime < tapTimeThreshold) {
+            // 連続タップとみなす
+            titleTapCount++
+
+            // タップ回数が5回に達したら開発者モードを切り替え
+            if (titleTapCount == 5) {
+                devModeEnabled = !devModeEnabled
+                titleTapCount = 0 // カウントリセット
+
+                // 開発者モード切り替えのフィードバック（必要に応じて）
+                // Toast.makeText(LocalContext.current, "開発者モード: ${if(devModeEnabled) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            // 連続タップではないのでカウントリセット
+            titleTapCount = 1
+        }
+        lastTapTime = currentTime
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,7 +108,8 @@ fun EpisodeViewScreen(
                         )
                         Text(
                             text = episode?.e_title ?: "エピソード $episodeNo",
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.clickable { onTitleTap() } // タイトルタップのイベントハンドラ追加
                         )
                     }
                 },
@@ -195,20 +225,34 @@ fun EpisodeViewScreen(
                     .padding(horizontal = 16.dp)
                     .verticalScroll(scrollState)
             ) {
-                // エピソードタイトル
+                // エピソードタイトル (タップで開発者モード切り替え機能を追加)
                 Text(
                     text = episode!!.e_title,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 16.dp)
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .clickable { onTitleTap() }
                 )
 
-                // 本文
-                RubyText(
-                    text = episode!!.body,
-                    fontSize = fontSize,
-                    modifier = Modifier.padding(bottom = 32.dp)
-                )
+                // 本文表示 (開発者モードに応じて表示を切り替え)
+                if (devModeEnabled) {
+                    // 開発者モード: 生のHTMLデータをそのまま表示
+                    Text(
+                        text = episode!!.body,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = fontSize.sp
+                        ),
+                        modifier = Modifier.padding(bottom = 32.dp)
+                    )
+                } else {
+                    // 通常モード: Ruby処理を行った表示
+                    RubyText(
+                        text = episode!!.body,
+                        fontSize = fontSize,
+                        modifier = Modifier.padding(bottom = 32.dp)
+                    )
+                }
             }
         } else {
             // ローディング表示
@@ -222,10 +266,8 @@ fun EpisodeViewScreen(
             }
         }
     }
-
-    // HTMLのrubyタグを処理する
-
 }
+
 fun processHtmlRuby(html: String): String {
     // HTMLタグを処理するための正規表現
     val rubyRegex = "<ruby>([^<]*?)<rt>([^<]*?)</rt></ruby>".toRegex()
@@ -255,37 +297,7 @@ fun buildRubyAnnotatedString(text: String, fontSize: TextUnit, rubyFontSize: Tex
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
-
-            // パターン1: 改行+[句読点のない文末]+改行後の（）
-            if (i < lines.size - 1 &&
-                !line.endsWith("。") && !line.endsWith("、") && !line.endsWith(".") && !line.endsWith(",") &&
-                lines[i + 1].startsWith("(") && lines[i + 1].endsWith(")")
-            ) {
-
-                val base = line
-                val ruby = lines[i + 1].substring(1, lines[i + 1].length - 1)
-
-                // ベーステキストを追加
-                append(base)
-
-                // ルビを追加
-                withStyle(
-                    SpanStyle(
-                        fontSize = rubyFontSize,
-                        baselineShift = BaselineShift.Superscript,
-                        fontWeight = FontWeight.Normal
-                    )
-                ) {
-                    append(" ")
-                    append(ruby)
-                    append(" ")
-                }
-
-                append("\n")
-                i += 2 // 2行進める
-            }
-            // パターン2: ｜文字列《ルビ》
-            else if (line.contains("｜") && line.contains("《") && line.contains("》")) {
+            if (line.contains("｜") && line.contains("《") && line.contains("》")) {
                 var currentIndex = 0
                 val regex = "｜([^《]*?)《([^》]*?)》".toRegex()
 
@@ -324,6 +336,37 @@ fun buildRubyAnnotatedString(text: String, fontSize: TextUnit, rubyFontSize: Tex
                 append("\n")
                 i++
             }
+            // パターン1: 改行+[句読点のない文末]+改行後の（）
+
+            // パターン2: ｜文字列《ルビ》
+            else if (i < lines.size - 1 &&
+                    !line.endsWith("。") && !line.endsWith("、") && !line.endsWith(".") && !line.endsWith(",") &&
+                    lines[i + 1].startsWith("(") && lines[i + 1].endsWith(")")
+            ) {
+
+                val base = line
+                val ruby = lines[i + 1].substring(1, lines[i + 1].length - 1)
+
+                // ベーステキストを追加
+                append(base)
+
+                // ルビを追加
+                withStyle(
+                    SpanStyle(
+                        fontSize = rubyFontSize,
+                        baselineShift = BaselineShift.Superscript,
+                        fontWeight = FontWeight.Normal
+                    )
+                ) {
+                    append(" ")
+                    append(ruby)
+                    append(" ")
+                }
+
+                append("\n")
+                i += 2 // 2行進める
+            }
+
             // 通常のテキスト
             else {
                 append(line)
