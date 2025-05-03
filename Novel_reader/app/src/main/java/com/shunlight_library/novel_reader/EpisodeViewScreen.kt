@@ -18,6 +18,16 @@ import androidx.compose.ui.unit.sp
 import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.AnnotatedString
+import android.text.Html
+import android.os.Build
+import androidx.compose.ui.unit.TextUnit
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,11 +204,9 @@ fun EpisodeViewScreen(
                 )
 
                 // 本文
-                Text(
-                    text = episode!!.body.removeHtmlTags(),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 16.sp
-                    ),
+                RubyText(
+                    text = episode!!.body,
+                    fontSize = fontSize,
                     modifier = Modifier.padding(bottom = 32.dp)
                 )
             }
@@ -214,4 +222,134 @@ fun EpisodeViewScreen(
             }
         }
     }
+
+    // HTMLのrubyタグを処理する
+
+}
+fun processHtmlRuby(html: String): String {
+    // HTMLタグを処理するための正規表現
+    val rubyRegex = "<ruby>([^<]*?)<rt>([^<]*?)</rt></ruby>".toRegex()
+
+    // rubyタグをカスタム形式に変換
+    var processedText = html.replace(rubyRegex) { matchResult ->
+        val base = matchResult.groupValues[1]
+        val ruby = matchResult.groupValues[2]
+        "｜$base《$ruby》"
+    }
+
+    // その他のHTMLタグを削除
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        processedText = Html.fromHtml(processedText, Html.FROM_HTML_MODE_LEGACY).toString()
+    } else {
+        @Suppress("DEPRECATION")
+        processedText = Html.fromHtml(processedText).toString()
+    }
+
+    return processedText
+}
+
+fun buildRubyAnnotatedString(text: String, fontSize: TextUnit, rubyFontSize: TextUnit): AnnotatedString {
+    val lines = text.split("\n")
+
+    return buildAnnotatedString {
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i]
+
+            // パターン1: 改行+[句読点のない文末]+改行後の（）
+            if (i < lines.size - 1 &&
+                !line.endsWith("。") && !line.endsWith("、") && !line.endsWith(".") && !line.endsWith(",") &&
+                lines[i + 1].startsWith("(") && lines[i + 1].endsWith(")")
+            ) {
+
+                val base = line
+                val ruby = lines[i + 1].substring(1, lines[i + 1].length - 1)
+
+                // ベーステキストを追加
+                append(base)
+
+                // ルビを追加
+                withStyle(
+                    SpanStyle(
+                        fontSize = rubyFontSize,
+                        baselineShift = BaselineShift.Superscript,
+                        fontWeight = FontWeight.Normal
+                    )
+                ) {
+                    append(" ")
+                    append(ruby)
+                    append(" ")
+                }
+
+                append("\n")
+                i += 2 // 2行進める
+            }
+            // パターン2: ｜文字列《ルビ》
+            else if (line.contains("｜") && line.contains("《") && line.contains("》")) {
+                var currentIndex = 0
+                val regex = "｜([^《]*?)《([^》]*?)》".toRegex()
+
+                val matches = regex.findAll(line)
+                for (match in matches) {
+                    val beforeText = line.substring(currentIndex, match.range.first)
+                    append(beforeText)
+
+                    val baseText = match.groupValues[1]
+                    val rubyText = match.groupValues[2]
+
+                    // ベーステキスト
+                    append(baseText)
+
+                    // ルビ
+                    withStyle(
+                        SpanStyle(
+                            fontSize = rubyFontSize,
+                            baselineShift = BaselineShift.Superscript,
+                            fontWeight = FontWeight.Normal
+                        )
+                    ) {
+                        append(" ")
+                        append(rubyText)
+                        append(" ")
+                    }
+
+                    currentIndex = match.range.last + 1
+                }
+
+                // 残りのテキスト
+                if (currentIndex < line.length) {
+                    append(line.substring(currentIndex))
+                }
+
+                append("\n")
+                i++
+            }
+            // 通常のテキスト
+            else {
+                append(line)
+                append("\n")
+                i++
+            }
+        }
+    }
+}
+
+
+
+@Composable
+fun RubyText(
+    text: String,
+    modifier: Modifier = Modifier,
+    fontSize: Int = 18,
+    rubyFontSize: Int = 10
+) {
+    val processedText = processHtmlRuby(text)
+    val annotatedString = buildRubyAnnotatedString(processedText, fontSize.sp, rubyFontSize.sp)
+    Text(
+        text = annotatedString,
+        modifier = modifier,
+        style = MaterialTheme.typography.bodyMedium.copy(
+            fontSize = fontSize.sp
+        )
+    )
 }
