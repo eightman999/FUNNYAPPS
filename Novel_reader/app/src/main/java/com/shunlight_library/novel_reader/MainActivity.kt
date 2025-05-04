@@ -389,11 +389,11 @@ fun NovelReaderApp() {
                                 .padding(8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            MenuButton(
-                                icon = ">",
-                                text = "カクヨム",
-                                onClick = { openUrl("https://kakuyomu.jp/") }
-                            )
+//                            MenuButton(
+//                                icon = ">",
+//                                text = "カクヨム",
+//                                onClick = { openUrl("https://kakuyomu.jp/") }
+//                            )
 
                             MenuButton(
                                 icon = "<",

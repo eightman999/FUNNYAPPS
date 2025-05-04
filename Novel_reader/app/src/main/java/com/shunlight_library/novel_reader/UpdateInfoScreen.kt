@@ -19,10 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.data.entity.UpdateQueueEntity
 import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils
 import kotlinx.coroutines.*
+import org.jsoup.Jsoup
 import org.yaml.snakeyaml.Yaml
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -345,7 +347,156 @@ fun UpdateInfoScreen(
 
                         Button(
                             onClick = {
-                                // TODO: 一括更新処理
+                                // 一括更新処理を実装
+                                if (updateQueue.isNotEmpty()) {
+                                    isSyncing = true
+                                    syncProgress = 0f
+                                    syncStep = "一括更新"
+                                    syncMessage = "小説のエピソードを更新中..."
+                                    currentCount = 0
+                                    totalCount = 0
+
+                                    scope.launch {
+                                        try {
+                                            // 対象エピソード数をカウント
+                                            var totalEpisodes = 0
+                                            updateQueue.forEach { queue ->
+                                                val episodesToDownload = queue.general_all_no - queue.total_ep
+                                                if (episodesToDownload > 0) {
+                                                    totalEpisodes += episodesToDownload
+                                                }
+                                            }
+
+                                            totalCount = totalEpisodes
+
+                                            // 各キューアイテムを処理
+                                            var processedEpisodes = 0
+
+                                            for (queueItem in updateQueue) {
+                                                // 小説情報を取得
+                                                val novel = repository.getNovelByNcode(queueItem.ncode)
+
+                                                if (novel != null) {
+                                                    // total_ep+1からgeneral_all_noまでのリストを作成
+                                                    val startEpisode = novel.total_ep + 1
+                                                    val endEpisode = queueItem.general_all_no
+
+                                                    if (startEpisode <= endEpisode) {
+                                                        // 更新状態を更新
+                                                        syncMessage = "「${novel.title}」のエピソードを更新中..."
+
+                                                        // エピソードリストを作成
+                                                        val episodesList = (startEpisode..endEpisode).toList()
+
+                                                        // エピソードの取得とスクレイピング
+                                                        val episodes = mutableListOf<EpisodeEntity>()
+
+                                                        for (episodeNo in episodesList) {
+                                                            // 進捗状況の更新
+                                                            val episodeNoStr = episodeNo.toString()
+                                                            syncMessage = "「${novel.title}」の第${episodeNoStr}話を取得中..."
+
+                                                            try {
+                                                                // 小説のURLを構築（通常版またはR18版）
+                                                                val baseUrl = if (novel.rating == 1) {
+                                                                    "https://novel18.syosetu.com"
+                                                                } else {
+                                                                    "https://ncode.syosetu.com"
+                                                                }
+
+                                                                val url = "$baseUrl/${queueItem.ncode}/$episodeNoStr/"
+
+                                                                // JSoupを使用してスクレイピング
+                                                                withContext(Dispatchers.IO) {
+                                                                    val doc = Jsoup.connect(url)
+                                                                        .userAgent("Mozilla/5.0")
+                                                                        .timeout(10000)
+                                                                        .get()
+
+                                                                    // タイトルの取得
+                                                                    val title = doc.select("h1.novel_title").text()
+                                                                    val eTitle = doc.select("p.novel_subtitle").text()
+
+                                                                    // 本文の取得
+                                                                    val body = doc.select("div#novel_honbun").html()
+
+                                                                    // 更新日時の取得
+                                                                    val updateTime = doc.select("div.novel_writetime").text()
+                                                                        .replace("novelupdated_at", "")
+                                                                        .trim()
+
+                                                                    // EpisodeEntityの作成
+                                                                    val episode = EpisodeEntity(
+                                                                        ncode = queueItem.ncode,
+                                                                        episode_no = episodeNoStr,
+                                                                        body = body,
+                                                                        e_title = eTitle,
+                                                                        update_time = updateTime
+                                                                    )
+
+                                                                    episodes.add(episode)
+                                                                }
+
+                                                                // 進捗を更新
+                                                                processedEpisodes++
+                                                                currentCount = processedEpisodes
+                                                                syncProgress = processedEpisodes.toFloat() / totalEpisodes
+
+                                                            } catch (e: Exception) {
+                                                                Log.e("UpdateInfo", "エピソード取得エラー: ${queueItem.ncode}-$episodeNoStr", e)
+                                                                // エラーは記録するが処理は継続
+                                                            }
+
+                                                            // UIの反応性を向上させるための短い遅延
+                                                            delay(100)
+                                                        }
+
+                                                        // バッチで保存
+                                                        if (episodes.isNotEmpty()) {
+                                                            repository.insertEpisodes(episodes)
+
+                                                            // 小説のtotal_epを更新
+                                                            val updatedNovel = novel.copy(total_ep = endEpisode)
+                                                            repository.updateNovel(updatedNovel)
+
+                                                            // 更新キューから削除
+                                                            repository.deleteUpdateQueueByNcode(queueItem.ncode)
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // 完了
+                                            withContext(Dispatchers.Main) {
+                                                syncMessage = "更新が完了しました"
+                                                syncProgress = 1.0f
+
+                                                Toast.makeText(
+                                                    context,
+                                                    "$processedEpisodes 件のエピソードを更新しました",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+
+                                                // 少し待機してから更新状態を終了
+                                                delay(1500)
+                                                isSyncing = false
+                                            }
+
+                                        } catch (e: Exception) {
+                                            Log.e("UpdateInfo", "一括更新エラー", e)
+
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "更新中にエラーが発生しました: ${e.message}",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+
+                                                isSyncing = false
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier.weight(1f),
                             enabled = !isRefreshing && !isSyncing && updateQueue.isNotEmpty()
