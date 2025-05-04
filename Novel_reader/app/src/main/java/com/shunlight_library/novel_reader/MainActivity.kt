@@ -74,6 +74,7 @@ fun NovelReaderApp() {
     var currentEpisodeNo by remember { mutableStateOf("") }
     // R18コンテンツ用のダイアログ表示状態
     var showR18Dialog by remember { mutableStateOf(false) }
+    var updateInfoText by remember { mutableStateOf("新着0件・更新あり0件") }
 
     // URLを開くヘルパー関数を修正
     fun openUrl(url: String) {
@@ -104,6 +105,16 @@ fun NovelReaderApp() {
                 novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
             }
         }
+    }
+    LaunchedEffect(Unit) {
+        lastReadNovel = repository.getMostRecentlyReadNovel()
+        if (lastReadNovel != null) {
+            novelInfo = repository.getNovelByNcode(lastReadNovel!!.ncode)
+        }
+
+        // 更新情報も取得
+        val (newCount, updateCount) = repository.getUpdateCounts()
+        updateInfoText = "新着${newCount}件・更新あり${updateCount}件"
     }
 
     // R18コンテンツ選択ダイアログ
@@ -276,7 +287,7 @@ fun NovelReaderApp() {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "新着1件・更新あり0件",
+                                    text = updateInfoText,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )

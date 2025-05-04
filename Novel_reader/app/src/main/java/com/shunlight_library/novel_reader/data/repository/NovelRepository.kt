@@ -8,7 +8,9 @@ import com.shunlight_library.novel_reader.data.entity.EpisodeEntity
 import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.data.entity.UpdateQueueEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -108,5 +110,30 @@ class NovelRepository(
 
     suspend fun deleteUpdateQueueByNcode(ncode: String) {
         updateQueueDao.deleteUpdateQueueByNcode(ncode)
+    }
+    // NovelRepository.kt に追加
+
+    // 更新チェック対象の小説を取得するメソッド
+    suspend fun getNovelsForUpdate(): List<NovelDescEntity> {
+        return withContext(Dispatchers.IO) {
+            // rating = 1, 2, 3, または null の小説を取得
+            novelDescDao.getNovelsForUpdate()
+        }
+    }
+
+    // データベースからUpdate_queueの総数と更新がある小説の数を取得するメソッド
+    suspend fun getUpdateCounts(): Pair<Int, Int> {
+        val allQueue = updateQueueDao.getAllUpdateQueueList()
+
+        // 新規追加と更新で分類
+        val newCount = allQueue.count { it.general_all_no == it.total_ep }
+        val updateCount = allQueue.size - newCount
+
+        return Pair(newCount, updateCount)
+    }
+    suspend fun getAllUpdateQueue(): List<UpdateQueueEntity> {
+        return withContext(Dispatchers.IO) {
+            updateQueueDao.getAllUpdateQueueList()
+        }
     }
 }

@@ -50,7 +50,7 @@ dependencies {
 // DataStore for preferences
     implementation ("androidx.compose.material:material-icons-extended:1.7.0")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-
+    implementation("org.yaml:snakeyaml:1.33")
 // DocumentFile for content provider access
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")

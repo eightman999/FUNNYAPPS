@@ -26,4 +26,7 @@ interface UpdateQueueDao {
 
     @Query("DELETE FROM update_queue WHERE ncode = :ncode")
     suspend fun deleteUpdateQueueByNcode(ncode: String)
+
+    @Query("SELECT * FROM update_queue")
+    suspend fun getAllUpdateQueueList(): List<UpdateQueueEntity>
 }
