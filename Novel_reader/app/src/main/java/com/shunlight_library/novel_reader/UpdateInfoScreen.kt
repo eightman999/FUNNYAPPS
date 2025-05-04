@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.data.entity.UpdateQueueEntity
+import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils
 import kotlinx.coroutines.*
 import org.yaml.snakeyaml.Yaml
 import java.io.BufferedReader
@@ -95,9 +96,6 @@ fun UpdateInfoScreen(
                                 // 更新対象の小説を取得
                                 var novels = repository.getNovelsForUpdate()
                                 totalCount = novels.size  // 総数を設定
-                                var processedNovels = 0
-                                var newCount = 0
-                                var updatedCount = 0
 
                                 // 進捗状態の更新関数
                                 val updateProgress = { count: Int, message: String ->
@@ -110,104 +108,122 @@ fun UpdateInfoScreen(
                                 // 初期プログレスを設定
                                 updateProgress(0, "小説の更新を確認中...")
 
-                                // 各小説を処理
-                                novels.forEach { novel ->
-                                    processedNovels++
+                                // 高速化: バッチ処理のためのグループ化
+                                val batchSize = 5 // 一度に処理する小説の数
+                                val novelBatches = novels.chunked(batchSize)
 
-                                    try {
-                                        // 進捗状態を更新
-                                        val progressPercent = (processedNovels.toFloat() / totalCount * 100).toInt()
-                                        updateProgress(
-                                            processedNovels,
-                                            "「${novel.title}」の更新を確認中 ($processedNovels/$totalCount - $progressPercent%)"
-                                        )
+                                var processedNovels = 0
+                                var newCount = 0
+                                var updatedCount = 0
 
-                                        // APIエンドポイントを選択
-                                        val apiUrl = if (novel.rating == 1) {
-                                            "https://api.syosetu.com/novel18api/api/?of=t-w-ga-s-ua&ncode=${novel.ncode}&gzip=5&json"
-                                        } else {
-                                            "https://api.syosetu.com/novelapi/api/?of=t-w-ga-s-ua&ncode=${novel.ncode}&gzip=5&json"
-                                        }
-
-                                        // APIからデータを取得
-                                        val result = withContext(Dispatchers.IO) {
+                                // 各バッチを処理
+                                for (batch in novelBatches) {
+                                    // 高速化: 並列処理で複数の小説を同時に処理
+                                    val deferreds = batch.map { novel ->
+                                        async(Dispatchers.IO) {
                                             try {
-                                                val connection = URL(apiUrl).openConnection() as HttpURLConnection
-                                                connection.requestMethod = "GET"
+                                                // 進捗状態を更新
+                                                val progressPercent = (processedNovels.toFloat() / totalCount * 100).toInt()
 
-                                                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                                                    // gzipファイルを解凍
-                                                    val inputStream = GZIPInputStream(connection.inputStream)
-                                                    val reader = BufferedReader(InputStreamReader(inputStream))
-                                                    val content = StringBuilder()
-                                                    var line: String?
+                                                // APIエンドポイントを選択
+                                                val apiUrl = if (novel.rating == 1) {
+                                                    "https://api.syosetu.com/novel18api/api/?of=t-w-ga-s-ua&ncode=${novel.ncode}&gzip=5&json"
+                                                } else {
+                                                    "https://api.syosetu.com/novelapi/api/?of=t-w-ga-s-ua&ncode=${novel.ncode}&gzip=5&json"
+                                                }
 
-                                                    while (reader.readLine().also { line = it } != null) {
-                                                        content.append(line).append("\n")
-                                                    }
+                                                // APIからデータを取得
+                                                try {
+                                                    val connection = URL(apiUrl).openConnection() as HttpURLConnection
+                                                    connection.requestMethod = "GET"
+                                                    connection.connectTimeout = 5000 // タイムアウト設定を追加
+                                                    connection.readTimeout = 5000
 
-                                                    // YAMLデータを解析
-                                                    val yaml = Yaml()
-                                                    val yamlData = yaml.load<List<Map<String, Any>>>(content.toString())
+                                                    if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                                                        // gzipファイルを解凍
+                                                        val inputStream = GZIPInputStream(connection.inputStream)
+                                                        val reader = BufferedReader(InputStreamReader(inputStream))
+                                                        val content = StringBuilder()
+                                                        var line: String?
 
-                                                    if (yamlData.size >= 2) {
-                                                        val novelData = yamlData[1]
-                                                        val newGeneralAllNo = novelData["general_all_no"] as Int
-                                                        val newUpdatedAt = novelData["updated_at"] as String
+                                                        while (reader.readLine().also { line = it } != null) {
+                                                            content.append(line).append("\n")
+                                                        }
 
-                                                        // データベースを更新
-                                                        if (newGeneralAllNo > novel.general_all_no) {
-                                                            // 小説情報を更新
-                                                            val updatedNovel = novel.copy(
-                                                                general_all_no = newGeneralAllNo,
-                                                                updated_at = newUpdatedAt
-                                                            )
-                                                            repository.updateNovel(updatedNovel)
+                                                        // YAMLデータを解析
+                                                        val yaml = Yaml()
+                                                        val yamlData = yaml.load<List<Map<String, Any>>>(content.toString())
 
-                                                            // 更新キューに追加
-                                                            val updateQueue = UpdateQueueEntity(
-                                                                ncode = novel.ncode,
-                                                                total_ep = novel.total_ep,
-                                                                general_all_no = newGeneralAllNo,
-                                                                update_time = newUpdatedAt
-                                                            )
-                                                            repository.insertUpdateQueue(updateQueue)
+                                                        if (yamlData.size >= 2) {
+                                                            val novelData = yamlData[1]
+                                                            val newGeneralAllNo = novelData["general_all_no"] as Int
 
-                                                            // 新規追加か更新かをカウント
-                                                            if (novel.general_all_no == 0) {
-                                                                newCount++
-                                                            } else {
-                                                                updatedCount++
+                                                            // データ型のキャストエラーを修正
+                                                            val updatedAtObj = novelData["updated_at"]
+                                                            val newUpdatedAt = when (updatedAtObj) {
+                                                                is String -> updatedAtObj
+                                                                is Date -> SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(updatedAtObj)
+                                                                else -> DatabaseSyncUtils.getCurrentDateTimeString() // 現在時刻をフォールバックとして使用
                                                             }
 
-                                                            true // 更新あり
+                                                            // データベースを更新
+                                                            if (newGeneralAllNo > novel.general_all_no) {
+                                                                // 小説情報を更新
+                                                                val updatedNovel = novel.copy(
+                                                                    general_all_no = newGeneralAllNo,
+                                                                    updated_at = newUpdatedAt
+                                                                )
+                                                                repository.updateNovel(updatedNovel)
+
+                                                                // 更新キューに追加
+                                                                val updateQueue = UpdateQueueEntity(
+                                                                    ncode = novel.ncode,
+                                                                    total_ep = novel.total_ep,
+                                                                    general_all_no = newGeneralAllNo,
+                                                                    update_time = newUpdatedAt
+                                                                )
+                                                                repository.insertUpdateQueue(updateQueue)
+
+                                                                // 新規追加か更新かをカウント
+                                                                if (novel.general_all_no == 0) {
+                                                                    newCount++
+                                                                } else {
+                                                                    updatedCount++
+                                                                }
+
+                                                                true // 更新あり
+                                                            } else {
+                                                                false // 更新なし
+                                                            }
                                                         } else {
-                                                            false // 更新なし
+                                                            false // データなし
                                                         }
                                                     } else {
-                                                        false // データなし
+                                                        false // HTTP通信失敗
                                                     }
-                                                } else {
-                                                    false // HTTP通信失敗
+                                                } catch (e: Exception) {
+                                                    Log.e("UpdateCheck", "エラー: ${novel.ncode} - ${e.message}")
+                                                    false // エラー発生
                                                 }
                                             } catch (e: Exception) {
-                                                Log.e("UpdateCheck", "エラー: ${novel.ncode} - ${e.message}")
-                                                false // エラー発生
+                                                Log.e("UpdateCheck", "小説処理エラー: ${novel.ncode} - ${e.message}")
+                                                false
                                             }
                                         }
-                                    } catch (e: Exception) {
-                                        Log.e("UpdateCheck", "小説処理エラー: ${novel.ncode} - ${e.message}")
                                     }
 
-                                    // 処理の遅延（サーバーに負荷をかけないため）
-                                    delay(500)  // 500ミリ秒待機
+                                    // バッチの全処理が完了するまで待機
+                                    deferreds.awaitAll()
+
+                                    // 処理済み小説数を更新
+                                    processedNovels += batch.size
+
+                                    // ユーザーへのフィードバックを更新
+                                    updateProgress(processedNovels, "小説の更新チェック中... ($processedNovels/$totalCount)")
+
                                 }
 
                                 // 完了メッセージを表示
-                                // 更新情報を再取得する部分の修正
-// collect は別の方法で使用する必要があります
-
-// 完了メッセージを表示
                                 withContext(Dispatchers.Main) {
                                     updateProgress(totalCount, "更新チェック完了")
 
@@ -220,10 +236,8 @@ fun UpdateInfoScreen(
 
                                     Toast.makeText(context, resultMessage, Toast.LENGTH_SHORT).show()
 
-                                    // 更新情報を再取得（Flow の collect の使用方法を修正）
+                                    // 更新情報を再取得
                                     try {
-                                        // collect は suspend 関数内で直接呼び出す必要がある
-                                        // 単一の値を取得するには first() を使うか、単発の collect を使う
                                         val latestQueueList = repository.getAllUpdateQueue()
                                         updateQueue = latestQueueList
 
@@ -549,7 +563,7 @@ fun UpdateQueueItem(
                 // N/n（X%）形式の表示を追加（未読エピソード数）
                 val unreadEpisodeCount = queueItem.general_all_no - queueItem.total_ep
                 val episodeText = if (unreadEpisodeCount > 0) {
-                    "全${queueItem.total_ep}話 (未読${unreadEpisodeCount}話)"
+                    "全${queueItem.total_ep}話 (未取得${unreadEpisodeCount}話)"
                 } else {
                     "全${queueItem.total_ep}話"
                 }
