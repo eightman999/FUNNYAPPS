@@ -88,7 +88,7 @@ fun NovelReaderApp() {
     var lastReadNovel by remember { mutableStateOf<LastReadNovelEntity?>(null) }
     var novelInfo by remember { mutableStateOf<NovelDescEntity?>(null) }
     var showNovelList by remember { mutableStateOf(false) }
-
+    var showUpdateInfo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         lastReadNovel = repository.getMostRecentlyReadNovel()
         if (lastReadNovel != null) {
@@ -181,6 +181,18 @@ fun NovelReaderApp() {
             )
 
         }
+        // 追加: 更新情報画面
+        showUpdateInfo -> {
+            UpdateInfoScreen(
+                onBack = { showUpdateInfo = false },
+                onNovelClick = { ncode ->
+                    currentNcode = ncode
+                    showUpdateInfo = false
+                    showEpisodeList = true
+                }
+            )
+        }
+
         showEpisodeList -> {
             EpisodeListScreen(
                 ncode = currentNcode,
@@ -253,7 +265,10 @@ fun NovelReaderApp() {
 
                             // 新着・更新情報をボタンに変更
                             Button(
-                                onClick = { /* TODO: 新着・更新情報画面に遷移 */ },
+                                onClick = {
+                                    // 新着・更新情報画面に遷移
+                                    showUpdateInfo = true
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
                                     contentColor = LightOrange
