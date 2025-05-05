@@ -428,18 +428,45 @@ fun UpdateInfoScreen(
 
                                                                         if (doc != null) {
                                                                             try {
-                                                                                // タイトルの取得
-                                                                                val title = doc.select("h1.p-novel__title.p-novel__title--rensai").text()
+                                                                                // タイトルの取得（text()でタグを除去）
+                                                                                var title = doc.select("h1.p-novel__title.p-novel__title--rensai").text()
 
-// 本文の取得
-                                                                                val bodyElements = doc.select("div.novel__body p")
-                                                                                val body = bodyElements.joinToString("\n") { it.text() }
+                                                                                // 本文の取得 - すべてのセクション（前書き、本文、後書き）を含む
+                                                                                // html()メソッドを使用してタグを保持
+                                                                                val bodyElements = doc.select("div.p-novel__body div.js-novel-text p")
+                                                                                val body = bodyElements.joinToString("\n<p></p><p>-----</p><p></p>\n") { "<p>${it.html()}</p>" }
 
-// 更新日時の取得
+                                                                                // タイトルまたは本文が空の場合はリトライ
+                                                                                if (title.isEmpty() || body.isEmpty()) {
+                                                                                    Log.d("UpdateInfo", "タイトルまたは本文が空のためリトライします: ${queueItem.ncode}-$episodeNoStr")
+
+                                                                                    // リトライロジック
+                                                                                    val retryDoc = fetchWithRetry(url)
+                                                                                    if (retryDoc != null) {
+                                                                                        // タイトルが空だった場合は再取得
+                                                                                        if (title.isEmpty()) {
+                                                                                            title = retryDoc.select("h1.p-novel__title.p-novel__title--rensai").text()
+                                                                                        }
+
+                                                                                        // 本文が空だった場合は再取得
+                                                                                        if (body.isEmpty()) {
+                                                                                            val bodyElements = doc.select("div.p-novel__body div.js-novel-text p")
+                                                                                            val body = bodyElements.joinToString("\n<p></p><p>-----</p><p></p>\n") { "<p>${it.html()}</p>" }
+                                                                                        }
+                                                                                    }
+                                                                                }
+
+                                                                                // それでも空の場合はエラー記録して次へ
+                                                                                if (title.isEmpty() || body.isEmpty()) {
+                                                                                    Log.e("UpdateInfo", "リトライ後も内容の取得に失敗: ${queueItem.ncode}-$episodeNoStr")
+
+                                                                                }
+
+                                                                                // 更新日時の取得
                                                                                 val now = Date()
                                                                                 val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(now)
 
-// EpisodeEntityの作成
+                                                                                // EpisodeEntityの作成（titleはtext()でタグ除去済み、bodyはhtml()でタグ保持）
                                                                                 val episode = EpisodeEntity(
                                                                                     ncode = queueItem.ncode,
                                                                                     episode_no = episodeNoStr,
@@ -447,7 +474,6 @@ fun UpdateInfoScreen(
                                                                                     e_title = title,
                                                                                     update_time = dateFormat
                                                                                 )
-
 
                                                                                 episodes.add(episode)
 
@@ -464,7 +490,6 @@ fun UpdateInfoScreen(
                                                                     } finally {
                                                                         connectionSemaphore.release() // 必ず解放
                                                                     }
-
                                                                 }
 
                                                                 // 進捗を更新
