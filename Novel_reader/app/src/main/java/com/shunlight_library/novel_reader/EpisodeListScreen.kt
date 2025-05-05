@@ -1,11 +1,13 @@
 package com.shunlight_library.novel_reader
 
+import android.provider.ContactsContract.CommonDataKinds.Website.URL
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -21,7 +23,44 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import com.shunlight_library.novel_reader.data.entity.LastReadNovelEntity
 import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
+import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
+import org.yaml.snakeyaml.Yaml
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.zip.GZIPInputStream
+
+enum class UpdateType {
+    UPDATE,      // 更新（新しいエピソードのみチェック）
+    REDOWNLOAD,  // 再取得（すべて削除して再取得）
+    FIX_ERRORS   // エラー修正（エラーや欠番のあるエピソードのみ修正）
+}
+
+// ダイアログ関連の状態変数
+private var showUpdateDialog by remember { mutableStateOf(false) }
+private var selectedUpdateType by remember { mutableStateOf(UpdateType.UPDATE) }
+private var isUpdating by remember { mutableStateOf(false) }
+private var updateProgress by remember { mutableStateOf(0f) }
+private var updateMessage by remember { mutableStateOf("") }
+
+// エピソード再取得の確認ダイアログ用
+private var showDownloadConfirmDialog by remember { mutableStateOf(false) }
+private var tempGeneralAllNo by remember { mutableStateOf(0) }
+
+// エラー修正確認ダイアログ用
+private var showErrorFixConfirmDialog by remember { mutableStateOf(false) }
+private var errorEpisodeCount by remember { mutableStateOf(0) }
+private var missingEpisodeCount by remember { mutableStateOf(0) }
+private var redownloadTargets by remember { mutableStateOf<List<Int>>(emptyList()) }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +72,7 @@ fun EpisodeListScreen(
     val repository = NovelReaderApplication.getRepository()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
 
     // 状態変数
     var novel by remember { mutableStateOf<NovelDescEntity?>(null) }
@@ -124,7 +164,197 @@ fun EpisodeListScreen(
             }
         )
     }
+// 更新方法選択ダイアログ
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isUpdating) showUpdateDialog = false },
+            title = { Text("小説更新") },
+            text = {
+                if (isUpdating) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator(progress = updateProgress)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(updateMessage)
 
+                        if (updateProgress > 0) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            LinearProgressIndicator(
+                                progress = updateProgress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = "${(updateProgress * 100).toInt()}%",
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Column {
+                        Text("更新方法を選択してください")
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 更新
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = selectedUpdateType == UpdateType.UPDATE,
+                                    onClick = { selectedUpdateType = UpdateType.UPDATE }
+                                )
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedUpdateType == UpdateType.UPDATE,
+                                onClick = { selectedUpdateType = UpdateType.UPDATE }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("更新", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "新しいエピソードがあれば更新キューに追加します",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+
+                        // 再取得
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = selectedUpdateType == UpdateType.REDOWNLOAD,
+                                    onClick = { selectedUpdateType = UpdateType.REDOWNLOAD }
+                                )
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedUpdateType == UpdateType.REDOWNLOAD,
+                                onClick = { selectedUpdateType = UpdateType.REDOWNLOAD }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("再取得", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "すべてのエピソードを削除して再取得します",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+
+                        // エラー修正
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = selectedUpdateType == UpdateType.FIX_ERRORS,
+                                    onClick = { selectedUpdateType = UpdateType.FIX_ERRORS }
+                                )
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedUpdateType == UpdateType.FIX_ERRORS,
+                                onClick = { selectedUpdateType = UpdateType.FIX_ERRORS }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("エラー修正", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "エラーのあるエピソードのみを再取得します",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // 選択したタイプに応じた処理を実行
+                        when (selectedUpdateType) {
+                            UpdateType.UPDATE -> performUpdate()
+                            UpdateType.REDOWNLOAD -> performRedownload()
+                            UpdateType.FIX_ERRORS -> performErrorFix()
+                        }
+                    },
+                    enabled = !isUpdating
+                ) {
+                    Text("実行")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showUpdateDialog = false },
+                    enabled = !isUpdating
+                ) {
+                    Text("キャンセル")
+                }
+            }
+        )
+    }
+
+// 再取得後の確認ダイアログ
+    if (showDownloadConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDownloadConfirmDialog = false },
+            title = { Text("エピソードを取得") },
+            text = {
+                Text("エピソードを削除しました。エピソードを今すぐ取得しますか？（時間がかかります）")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showDownloadConfirmDialog = false
+                    // エピソードを取得する処理を実行
+                    performDownloadEpisodes(tempGeneralAllNo)
+                }) {
+                    Text("はい")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDownloadConfirmDialog = false
+                    // 更新キューに追加するだけの処理を実行
+                    performAddToUpdateQueue(tempGeneralAllNo)
+                }) {
+                    Text("更新キューに追加のみ")
+                }
+            }
+        )
+    }
+
+// エラー修正確認ダイアログ
+    if (showErrorFixConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showErrorFixConfirmDialog = false },
+            title = { Text("エラー修正") },
+            text = {
+                Text(
+                    "エラーのあるエピソード: ${errorEpisodeCount}件\n" +
+                            "欠番エピソード: ${missingEpisodeCount}件\n\n" +
+                            "合計${redownloadTargets.size}件のエピソードを再取得しますか？"
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showErrorFixConfirmDialog = false
+                    executeErrorFix()
+                }) {
+                    Text("再取得する")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showErrorFixConfirmDialog = false }) {
+                    Text("キャンセル")
+                }
+            }
+        )
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -215,7 +445,8 @@ fun EpisodeListScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                Toast.makeText(context, "小説更新機能は後で実装予定です", Toast.LENGTH_SHORT).show()
+                                // 更新処理開始
+                                startUpdateProcess()
                             }
                             .padding(vertical = 8.dp)
                     ) {
@@ -424,6 +655,481 @@ fun EpisodeItem(
                     color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+            }
+        }
+    }
+}
+
+// API呼び出し関数: APIから小説情報を取得
+private suspend fun fetchNovelInfo(ncode: String): Pair<Int, String> {
+    val apiUrl = if (novel.rating == 1) {
+        "https://api.syosetu.com/novel18api/api/?of=t-w-ga-s-ua&ncode=$ncode&gzip=5&json"
+    } else {
+        "https://api.syosetu.com/novelapi/api/?of=t-w-ga-s-ua&ncode=$ncode&gzip=5&json"
+    }
+
+    return withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(apiUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val inputStream = GZIPInputStream(connection.inputStream)
+                val reader = BufferedReader(InputStreamReader(inputStream))
+                val content = StringBuilder()
+                var line: String?
+
+                while (reader.readLine().also { line = it } != null) {
+                    content.append(line).append("\n")
+                }
+
+                val yaml = Yaml()
+                val yamlData = yaml.load<List<Map<String, Any>>>(content.toString())
+
+                if (yamlData.size >= 2) {
+                    val novelData = yamlData[1]
+                    val newGeneralAllNo = novelData["general_all_no"] as Int
+
+                    // 更新日時の取得
+                    val updatedAtObj = novelData["updated_at"]
+                    val newUpdatedAt = when (updatedAtObj) {
+                        is String -> updatedAtObj
+                        is Date -> SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(updatedAtObj)
+                        else -> DatabaseSyncUtils.getCurrentDateTimeString()
+                    }
+
+                    Pair(newGeneralAllNo, newUpdatedAt)
+                } else {
+                    Pair(-1, "")
+                }
+            } else {
+                Pair(-1, "")
+            }
+        } catch (e: Exception) {
+            Log.e("EpisodeListScreen", "API取得エラー: ${e.message}", e)
+            Pair(-1, "")
+        }
+    }
+}
+
+// エピソードを取得する関数（スクレイピング）
+private suspend fun fetchEpisode(ncode: String, episodeNo: Int, isR18: Boolean): EpisodeEntity? {
+    val baseUrl = if (isR18) {
+        "https://novel18.syosetu.com"
+    } else {
+        "https://ncode.syosetu.com"
+    }
+
+    val url = "$baseUrl/$ncode/$episodeNo/"
+
+    return withContext(Dispatchers.IO) {
+        try {
+            val doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0")
+                .timeout(30000)
+                .get()
+
+            val title = doc.select("h1.p-novel__title.p-novel__title--rensai").text()
+            val bodyElements = doc.select("div.p-novel__body div.js-novel-text p")
+            val body = bodyElements.joinToString("\n<p></p><p>-----</p><p></p>\n") { "<p>${it.html()}</p>" }
+
+            if (title.isNotEmpty() && body.isNotEmpty()) {
+                val currentDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+                EpisodeEntity(
+                    ncode = ncode,
+                    episode_no = episodeNo.toString(),
+                    body = body,
+                    e_title = title,
+                    update_time = currentDate
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("EpisodeListScreen", "エピソード取得エラー: $episodeNo", e)
+            null
+        }
+    }
+}
+// 更新処理の開始関数
+private fun startUpdateProcess() {
+    showUpdateDialog = true
+    selectedUpdateType = UpdateType.UPDATE
+    isUpdating = false
+    updateProgress = 0f
+    updateMessage = ""
+}
+
+// 「更新」実行関数
+private fun performUpdate() {
+    isUpdating = true
+    updateProgress = 0f
+    updateMessage = "APIで最新情報を確認中..."
+
+    scope.launch {
+        try {
+            val (newGeneralAllNo, newUpdatedAt) = fetchNovelInfo(novel.ncode)
+
+            if (newGeneralAllNo == -1) {
+                // APIからデータが取得できなかった
+                withContext(Dispatchers.Main) {
+                    updateProgress = 1f
+                    updateMessage = "APIからデータが取得できませんでした"
+                    Toast.makeText(context, "APIからデータが取得できませんでした", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    isUpdating = false
+                    showUpdateDialog = false
+                }
+                return@launch
+            }
+
+            // 更新があるか確認
+            if (newGeneralAllNo > novel.general_all_no) {
+                // 小説情報を更新
+                val updatedNovel = novel.copy(
+                    general_all_no = newGeneralAllNo,
+                    updated_at = newUpdatedAt
+                )
+                repository.updateNovel(updatedNovel)
+
+                // 更新キューに追加
+                val updateQueue = UpdateQueueEntity(
+                    ncode = novel.ncode,
+                    total_ep = novel.total_ep,
+                    general_all_no = newGeneralAllNo,
+                    update_time = newUpdatedAt
+                )
+                repository.insertUpdateQueue(updateQueue)
+
+                // 通知
+                withContext(Dispatchers.Main) {
+                    updateProgress = 1f
+                    updateMessage = "更新を確認しました。更新キューに追加しました。"
+                    Toast.makeText(context, "更新を確認しました", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    isUpdating = false
+                    showUpdateDialog = false
+                }
+            } else {
+                // 更新なし
+                withContext(Dispatchers.Main) {
+                    updateProgress = 1f
+                    updateMessage = "更新はありません"
+                    Toast.makeText(context, "この小説に更新はありません", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    isUpdating = false
+                    showUpdateDialog = false
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "エラー: ${e.message}"
+                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                delay(1500)
+                isUpdating = false
+                showUpdateDialog = false
+            }
+        }
+    }
+}
+
+// 「再取得」実行関数
+private fun performRedownload() {
+    isUpdating = true
+    updateProgress = 0f
+    updateMessage = "エピソードを削除中..."
+
+    scope.launch {
+        try {
+            // エピソードを削除
+            withContext(Dispatchers.IO) {
+                repository.deleteEpisodesByNcode(novel.ncode)
+            }
+
+            updateProgress = 0.3f
+            updateMessage = "APIで最新情報を確認中..."
+
+            val (newGeneralAllNo, newUpdatedAt) = fetchNovelInfo(novel.ncode)
+
+            if (newGeneralAllNo == -1) {
+                withContext(Dispatchers.Main) {
+                    updateProgress = 1f
+                    updateMessage = "APIからデータが取得できませんでした"
+                    Toast.makeText(context, "APIからデータが取得できませんでした", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    isUpdating = false
+                    showUpdateDialog = false
+                }
+                return@launch
+            }
+
+            // 小説情報を更新
+            val updatedNovel = novel.copy(
+                general_all_no = newGeneralAllNo,
+                total_ep = 0, // エピソードを削除したので0に
+                updated_at = newUpdatedAt
+            )
+            repository.updateNovel(updatedNovel)
+
+            // 確認ダイアログを表示するためにUIスレッドに戻る
+            withContext(Dispatchers.Main) {
+                tempGeneralAllNo = newGeneralAllNo
+                isUpdating = false
+                showUpdateDialog = false
+                showDownloadConfirmDialog = true
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "エラー: ${e.message}"
+                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                delay(1500)
+                isUpdating = false
+                showUpdateDialog = false
+            }
+        }
+    }
+}
+
+// エピソードをダウンロードする関数
+private fun performDownloadEpisodes(generalAllNo: Int) {
+    isUpdating = true
+    updateProgress = 0.3f
+    updateMessage = "エピソードを取得中... (0/$generalAllNo)"
+
+    scope.launch {
+        try {
+            // 更新日時
+            val currentDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+            var successCount = 0
+            var failCount = 0
+
+            // エピソード番号のリスト
+            val episodeNumbers = (1..generalAllNo).toList()
+
+            // スクレイピングの実行
+            for ((index, episodeNo) in episodeNumbers.withIndex()) {
+                val episode = fetchEpisode(novel.ncode, episodeNo, novel.rating == 1)
+
+                if (episode != null) {
+                    // データベースに保存
+                    withContext(Dispatchers.IO) {
+                        repository.insertEpisode(episode)
+                    }
+                    successCount++
+                } else {
+                    failCount++
+                }
+
+                // サーバーに負荷をかけないように少し待機
+                delay(1000) // 1秒待機
+
+                // 進捗を更新
+                val progress = (index + 1).toFloat() / generalAllNo
+                updateProgress = 0.3f + (0.7f * progress)
+                updateMessage = "エピソードを取得中... (${index + 1}/$generalAllNo)"
+            }
+
+            // 小説のtotal_epを更新
+            val updatedNovel = novel.copy(
+                total_ep = successCount,
+                general_all_no = generalAllNo
+            )
+            repository.updateNovel(updatedNovel)
+
+            // 処理結果の通知
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "完了: 成功${successCount}件、失敗${failCount}件"
+                Toast.makeText(context, "完了: 成功${successCount}件、失敗${failCount}件", Toast.LENGTH_SHORT).show()
+                delay(2000)
+                isUpdating = false
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "エラー: ${e.message}"
+                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                delay(1500)
+                isUpdating = false
+            }
+        }
+    }
+}
+
+// 更新キューに追加するだけの関数
+private fun performAddToUpdateQueue(generalAllNo: Int) {
+    scope.launch {
+        try {
+            // 更新日時
+            val currentDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+            // 更新キューに追加
+            val updateQueue = UpdateQueueEntity(
+                ncode = novel.ncode,
+                total_ep = 0, // 全て削除したので0
+                general_all_no = generalAllNo,
+                update_time = currentDate
+            )
+            repository.insertUpdateQueue(updateQueue)
+
+            // 通知
+            Toast.makeText(context, "エピソードを削除し、更新キューに追加しました。エピソードを取得するには「新着・更新情報」から「一括更新」を実行してください。", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            // 例外発生
+            Toast.makeText(context, "更新キューへの追加でエラーが発生しました: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+// 「エラー修正」実行関数
+private fun performErrorFix() {
+    isUpdating = true
+    updateProgress = 0f
+    updateMessage = "エピソードをチェック中..."
+
+    scope.launch {
+        try {
+            // エピソードを取得
+            val episodes = repository.getEpisodesByNcode(novel.ncode).first()
+
+            // エラーのあるエピソードを見つける
+            val errorEpisodes = episodes.filter {
+                it.body.isEmpty() || it.e_title.isEmpty()
+            }
+
+            // APIで最新情報を取得して、総エピソード数を確認
+            updateProgress = 0.2f
+            updateMessage = "APIで最新情報を確認中..."
+
+            val (generalAllNo, _) = fetchNovelInfo(novel.ncode)
+
+            if (generalAllNo == -1) {
+                // APIから取得失敗時は既存の値を使用
+                generalAllNo = novel.general_all_no
+            }
+
+            // エピソードの番号リスト（IntとStringの両方を持つ）
+            val episodeNumberMap = episodes.associate {
+                val numericValue = it.episode_no.toIntOrNull() ?: 0
+                numericValue to it.episode_no
+            }
+
+            // 最大エピソード番号を取得
+            val maxEpisodeNo = episodeNumberMap.keys.maxOrNull() ?: 0
+
+            // 欠番リスト（1から最大の番号の範囲で）
+            val checkRangeMax = maxOf(generalAllNo, maxEpisodeNo)
+            val missingEpisodes = (1..checkRangeMax).filter { epNo ->
+                !episodeNumberMap.containsKey(epNo)
+            }
+
+            errorEpisodeCount = errorEpisodes.size
+            missingEpisodeCount = missingEpisodes.size
+
+            // エラーのあるエピソードの番号リスト
+            val errorEpisodeNumbers = errorEpisodes.mapNotNull { it.episode_no.toIntOrNull() }
+
+            // 再取得対象の番号リスト（エラーと欠番を合わせる）
+            redownloadTargets = (errorEpisodeNumbers + missingEpisodes).distinct().sorted()
+
+            if (redownloadTargets.isEmpty()) {
+                // エラーも欠番もない
+                withContext(Dispatchers.Main) {
+                    updateProgress = 1f
+                    updateMessage = "エラーや欠番は見つかりませんでした"
+                    Toast.makeText(context, "エラーや欠番は見つかりませんでした", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    isUpdating = false
+                    showUpdateDialog = false
+                }
+                return@launch
+            }
+
+            // 確認ダイアログを表示
+            withContext(Dispatchers.Main) {
+                isUpdating = false
+                showUpdateDialog = false
+                showErrorFixConfirmDialog = true
+            }
+        } catch (e: Exception) {
+            // 例外発生
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "エラー: ${e.message}"
+                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                delay(1500)
+                isUpdating = false
+                showUpdateDialog = false
+            }
+        }
+    }
+}
+
+// エラー修正の実行関数
+private fun executeErrorFix() {
+    isUpdating = true
+    updateProgress = 0.3f
+    updateMessage = "エラーまたは欠番のあるエピソードを再取得中... (0/${redownloadTargets.size})"
+
+    scope.launch {
+        try {
+            var successCount = 0
+            var failCount = 0
+
+            // スクレイピングの実行
+            for ((index, episodeNo) in redownloadTargets.withIndex()) {
+                val episode = fetchEpisode(novel.ncode, episodeNo, novel.rating == 1)
+
+                if (episode != null) {
+                    // データベースに保存
+                    withContext(Dispatchers.IO) {
+                        repository.insertEpisode(episode)
+                    }
+                    successCount++
+                } else {
+                    failCount++
+                }
+
+                // サーバーに負荷をかけないように少し待機
+                delay(1000) // 1秒待機
+
+                // 進捗を更新
+                val progress = (index + 1).toFloat() / redownloadTargets.size
+                updateProgress = 0.3f + (0.7f * progress)
+                updateMessage = "エラーまたは欠番のあるエピソードを再取得中... (${index + 1}/${redownloadTargets.size})"
+            }
+
+            // 小説のtotal_epを更新
+            val updatedEpisodes = repository.getEpisodesByNcode(novel.ncode).first()
+            val maxEpisodeNo = updatedEpisodes.mapNotNull { it.episode_no.toIntOrNull() }.maxOrNull() ?: 0
+
+            if (maxEpisodeNo > novel.total_ep) {
+                val updatedNovel = novel.copy(total_ep = maxEpisodeNo)
+                repository.updateNovel(updatedNovel)
+            }
+
+            // 処理結果の通知
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "完了: 成功${successCount}件、失敗${failCount}件"
+                Toast.makeText(context, "完了: 成功${successCount}件、失敗${failCount}件", Toast.LENGTH_SHORT).show()
+                delay(2000)
+                isUpdating = false
+            }
+        } catch (e: Exception) {
+            // 例外発生
+            withContext(Dispatchers.Main) {
+                updateProgress = 1f
+                updateMessage = "エラー: ${e.message}"
+                Toast.makeText(context, "エラー: ${e.message}", Toast.LENGTH_SHORT).show()
+                delay(1500)
+                isUpdating = false
             }
         }
     }
