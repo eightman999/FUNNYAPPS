@@ -485,18 +485,13 @@ fun NovelReaderApp() {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             MenuButton(
-                                icon = "⬇",
-                                text = "ダウンロード状況",
-                                onClick = {}
-                            )
-                            MenuButton(
                                 icon = "⚙",
                                 text = "設定",
                                 onClick = { showSettings = true }
                             )
                             MenuButton(
                                 icon = "",
-                                text = "同期",
+                                text = "DB同期",
                                 onClick = {
                                     val intent = Intent(context, DatabaseSyncActivity::class.java)
                                     context.startActivity(intent)
