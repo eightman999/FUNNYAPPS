@@ -11,4 +11,4 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 // アプリ専用の色を追加
-val LightOrange = Color(0xFFE8836B) // ヘッダー部分の背景色
+val LightOrange = Color(0xFFA0D8EF) // ヘッダー部分の背景色
