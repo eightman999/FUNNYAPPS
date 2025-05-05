@@ -1,5 +1,6 @@
 package com.shunlight_library.novel_reader
 
+import RecentlyUpdatedNovelsScreen
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -75,7 +76,8 @@ fun NovelReaderApp() {
     // R18コンテンツ用のダイアログ表示状態
     var showR18Dialog by remember { mutableStateOf(false) }
     var updateInfoText by remember { mutableStateOf("新着0件・更新あり0件") }
-
+    var showRecentlyReadNovels by remember { mutableStateOf(false) }
+    var showRecentlyUpdatedNovelsScreen by remember { mutableStateOf(false) }
     // URLを開くヘルパー関数を修正
     fun openUrl(url: String) {
         currentUrl = url
@@ -177,7 +179,27 @@ fun NovelReaderApp() {
                 onBack = { showWebView = false }
             )
         }
-
+        showRecentlyReadNovels -> {
+            RecentlyReadNovelsScreen(
+                onBack = { showRecentlyReadNovels = false },
+                onNovelClick = { ncode, episodeNo ->
+                    currentNcode = ncode
+                    currentEpisodeNo = episodeNo
+                    showEpisodeView = true
+                    showRecentlyReadNovels = false
+                }
+            )
+        }
+        showRecentlyUpdatedNovelsScreen -> {
+            RecentlyUpdatedNovelsScreen(
+                onBack = { showRecentlyUpdatedNovelsScreen = false },
+                onNovelClick = { ncode ->
+                    currentNcode = ncode
+                    showRecentlyUpdatedNovelsScreen = false
+                    showEpisodeList = true
+                }
+            )
+        }
         showSettings -> {
             SettingsScreenUpdated(onBack = { showSettings = false })
         }
@@ -424,7 +446,9 @@ fun NovelReaderApp() {
                             MenuButton(
                                 icon = ">",
                                 text = "最近更新された小説",
-                                onClick = {}
+                                onClick = {
+                                    showRecentlyUpdatedNovelsScreen = true
+                                }
                             )
                         }
                     }
@@ -440,32 +464,12 @@ fun NovelReaderApp() {
                             MenuButton(
                                 icon = ">",
                                 text = "最近読んだ小説",
-                                onClick = {}
+                                onClick = { showRecentlyReadNovels = true }
                             )
-                            MenuButton(
-                                icon = ">",
-                                text = "作者別\nシリーズ別",
-                                onClick = {}
-                            )
+
                         }
                     }
 
-                    // タグ検索
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            MenuButton(
-                                icon = ">",
-                                text = "タグ検索",
-                                onClick = {},
-                                modifier = Modifier.width(180.dp)
-                            )
-                        }
-                    }
 
                     // オプションセクション
                     item {
