@@ -24,11 +24,15 @@ import com.shunlight_library.novel_reader.data.entity.NovelDescEntity
 import com.shunlight_library.novel_reader.data.entity.UpdateQueueEntity
 import com.shunlight_library.novel_reader.data.sync.DatabaseSyncUtils
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Semaphore
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.yaml.snakeyaml.Yaml
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
@@ -57,7 +61,7 @@ fun UpdateInfoScreen(
     var syncMessage by remember { mutableStateOf("") }
     var currentCount by remember { mutableStateOf(0) }
     var totalCount by remember { mutableStateOf(0) }
-
+    val connectionSemaphore = Semaphore(3)
     // データ取得
     LaunchedEffect(key1 = Unit) {
         repository.allUpdateQueue.collect { queueList ->
@@ -407,34 +411,60 @@ fun UpdateInfoScreen(
                                                                 val url = "$baseUrl/${queueItem.ncode}/$episodeNoStr/"
 
                                                                 // JSoupを使用してスクレイピング
+                                                                // スクレイピング部分のコード修正
                                                                 withContext(Dispatchers.IO) {
-                                                                    val doc = Jsoup.connect(url)
-                                                                        .userAgent("Mozilla/5.0")
-                                                                        .timeout(10000)
-                                                                        .get()
+                                                                    connectionSemaphore.acquire()
+                                                                    try {
+                                                                        val baseUrl = if (novel.rating == 1) {
+                                                                            "https://novel18.syosetu.com"
+                                                                        } else {
+                                                                            "https://ncode.syosetu.com"
+                                                                        }
 
-                                                                    // タイトルの取得
-                                                                    val title = doc.select("h1.novel_title").text()
-                                                                    val eTitle = doc.select("p.novel_subtitle").text()
+                                                                        val url = "$baseUrl/${queueItem.ncode}/$episodeNoStr/"
 
-                                                                    // 本文の取得
-                                                                    val body = doc.select("div#novel_honbun").html()
+                                                                        // リトライロジックを実装した関数を使用
+                                                                        val doc = fetchWithRetry(url)
 
-                                                                    // 更新日時の取得
-                                                                    val updateTime = doc.select("div.novel_writetime").text()
-                                                                        .replace("novelupdated_at", "")
-                                                                        .trim()
+                                                                        if (doc != null) {
+                                                                            try {
+                                                                                // タイトルの取得
+                                                                                val title = doc.select("h1.p-novel__title.p-novel__title--rensai").text()
 
-                                                                    // EpisodeEntityの作成
-                                                                    val episode = EpisodeEntity(
-                                                                        ncode = queueItem.ncode,
-                                                                        episode_no = episodeNoStr,
-                                                                        body = body,
-                                                                        e_title = eTitle,
-                                                                        update_time = updateTime
-                                                                    )
+// 本文の取得
+                                                                                val bodyElements = doc.select("div.novel__body p")
+                                                                                val body = bodyElements.joinToString("\n") { it.text() }
 
-                                                                    episodes.add(episode)
+// 更新日時の取得
+                                                                                val now = Date()
+                                                                                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(now)
+
+// EpisodeEntityの作成
+                                                                                val episode = EpisodeEntity(
+                                                                                    ncode = queueItem.ncode,
+                                                                                    episode_no = episodeNoStr,
+                                                                                    body = body,
+                                                                                    e_title = title,
+                                                                                    update_time = dateFormat
+                                                                                )
+
+
+                                                                                episodes.add(episode)
+
+                                                                                // 成功ログ
+                                                                                Log.d("UpdateInfo", "エピソード取得成功: ${queueItem.ncode}-$episodeNoStr")
+                                                                            } catch (e: Exception) {
+                                                                                // 解析エラー
+                                                                                Log.e("UpdateInfo", "エピソード解析エラー: ${queueItem.ncode}-$episodeNoStr", e)
+                                                                            }
+                                                                        } else {
+                                                                            // 取得失敗ログ
+                                                                            Log.e("UpdateInfo", "エピソード取得失敗: ${queueItem.ncode}-$episodeNoStr")
+                                                                        }
+                                                                    } finally {
+                                                                        connectionSemaphore.release() // 必ず解放
+                                                                    }
+
                                                                 }
 
                                                                 // 進捗を更新
@@ -746,4 +776,62 @@ private fun formatDate(dateString: String): String {
     } catch (e: Exception) {
         dateString
     }
+}
+// リトライロジックとランダムユーザーエージェント選択を実装した関数
+private suspend fun fetchWithRetry(url: String, maxRetries: Int = 3): Document? {
+    val USER_AGENTS = listOf(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:54.0) Gecko/20100101 Firefox/54.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/602.3.12 (KHTML, like Gecko) Version/10.0.3 Safari/602.3.12",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 10_3_1 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1",
+        "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:54.0) Gecko/20100101 Firefox/54.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/602.3.12 (KHTML, like Gecko) Version/10.0.3 Safari/602.3.12",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 10_3_1 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1"
+    )
+
+    var retryCount = 0
+    var lastException: Exception? = null
+
+    while (retryCount < maxRetries) {
+        try {
+            // ランダムなユーザーエージェントを選択
+            val randomUserAgent = USER_AGENTS.random()
+
+            Log.d("UpdateInfo", "接続試行 ${retryCount + 1}/$maxRetries: $url")
+            Log.d("UpdateInfo", "使用中のユーザーエージェント: $randomUserAgent")
+
+            return Jsoup.connect(url)
+                .userAgent(randomUserAgent)
+                .timeout(30000)  // 30秒に設定
+                .maxBodySize(0)  // 無制限のボディサイズ
+                .followRedirects(true)
+                .ignoreHttpErrors(true)
+                .get()
+        } catch (e: SocketTimeoutException) {
+            lastException = e
+            Log.w("UpdateInfo", "タイムアウト発生 ${retryCount + 1}/$maxRetries: $url - ${e.message}")
+            retryCount++
+
+            // 指数バックオフ（リトライ間隔を徐々に増加）
+            val delayTime = 2000L * (retryCount + 1)
+            Log.d("UpdateInfo", "$delayTime ミリ秒後に再試行します")
+            delay(delayTime)
+        } catch (e: IOException) {
+            lastException = e
+            Log.w("UpdateInfo", "IO例外発生 ${retryCount + 1}/$maxRetries: $url - ${e.message}")
+            retryCount++
+
+            // 指数バックオフ
+            val delayTime = 2000L * (retryCount + 1)
+            Log.d("UpdateInfo", "$delayTime ミリ秒後に再試行します")
+            delay(delayTime)
+        }
+    }
+
+    // 最大リトライ回数を超えた場合
+    Log.e("UpdateInfo", "最大リトライ回数を超えました: $url", lastException)
+    return null
 }
