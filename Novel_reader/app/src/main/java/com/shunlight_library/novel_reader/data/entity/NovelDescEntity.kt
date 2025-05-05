@@ -24,3 +24,5 @@ data class NovelDescEntity(
     val general_all_no: Int,
     val updated_at: String
 )
+
+//https://api.syosetu.com/novel18api/api/?of=t-w-ga-s-ua&ncode={ncode}&gzip=5&json
